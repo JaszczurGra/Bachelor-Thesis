@@ -6,13 +6,13 @@ import numpy as np
 import time
 import decorify
 
-from pathfinders import batched_astar,batched_bfs_shortest_paths
+from pathfinders import batched_astar,batched_bfs_shortest_paths,batched_rstar,batched_rstar_gpu
 
 def visualize():
 
-    n = 100
+    n = 1000
     m = n
-    animation_time = 0
+    animation_time = None
     data_gen = DataGenerator(n,m,(11 ,10),(10, n // 20))
 
     batch = 100
@@ -25,7 +25,7 @@ def visualize():
     @decorify.timeit(accuracy=5)
     def pathfind():
         nonlocal batch_data, batch_path
-        batch_path = batched_bfs_shortest_paths(batch_data)
+        batch_path = batched_rstar_gpu(batch_data)
 
 
     def next_data():    
