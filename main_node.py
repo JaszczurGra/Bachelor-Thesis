@@ -3,6 +3,7 @@ import random
 from collections import deque
 from typing import List, Tuple
 import itertools
+import time
 
 def generate_graph_from_obstacles(obstacles: List[Tuple[float, float, float]],
                                   num_nodes_per_circle: int = 8,
@@ -270,14 +271,70 @@ def plot(nodes, obstacles, graph, paths=None, figsize=(12, 6), titles=("Left", "
 
 
 
+
+def plot_single_path(nodes, obstacles, graph, paths, figsize=(6, 12)):
+    fig, axs = plt.subplots(1, 2)
+    plot_graph(axs[0], nodes, obstacles, graph, "Graph")
+
+    def plot_path(ax,path):
+          # start & goal
+        ax.clear()
+
+        ax.scatter([nodes[0][0]], [nodes[0][1]], c='green', s=100, marker='o', label='Start')
+        ax.scatter([nodes[1][0]], [nodes[1][1]], c='red', s=100, marker='x', label='Goal')
+
+        # obstacles
+        for cx, cy, r in obstacles:
+            circle = plt.Circle((cx, cy), r, color='orange', alpha=0.3)
+            ax.add_patch(circle)
+
+
+        path_x = [nodes[node][0] for node in path]
+        path_y = [nodes[node][1] for node in path]
+        axs[1].plot(path_x, path_y, label='Path', alpha=0.8, linewidth=3)
+
+    axs[1].set_aspect('equal')
+    # plt.tight_layout()
+    # plot_graph_paths(axs[1], nodes, obstacles, paths, "Path")
+
+    # for path in paths:
+    #     plot_path(axs[1],path)   
+    #     time.sleep(1)   
+    #     plt.show()
+
+    plt.ion()
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+    # try:
+        # for path in paths:
+
+    while True:
+        path = random.choice(paths)
+        # clear and redraw only right axis
+        plot_path(axs[1],path)
+        path_x = [nodes[node][0] for node in path]
+        path_y = [nodes[node][1] for node in path]
+        axs[1].plot(path_x, path_y, label='Path', alpha=0.8, linewidth=3, color='tab:blue')
+        axs[1].set_title(f"Path (len={len(path)})")
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.0001)  # non-blocking pause + GUI event processing
+    # finally:
+    #     plt.ioff()
+    #     plt.show()
+
+
+
+
 # Example usage:
 while True:
     obstacles = []
     for i in range(random.randint(5,30)):
         obstacles.append((random.randint(50, 150), random.randint(50, 400), random.randint(15, 30)))
-    graph, nodes, start, goal = generate_graph_from_obstacles(obstacles,max_connection_distance=200,num_poisson_points=150)
-    paths = find_paths(graph, 0, 1,max_depth=8)
+    graph, nodes, start, goal = generate_graph_from_obstacles(obstacles,max_connection_distance=200,num_poisson_points=30)
+    paths = find_paths(graph, 0, 1,max_depth=9)
     print(f"Found {len(paths)} paths")
     ranked_paths = rank_paths(paths, nodes, 1)
 
-    plot(nodes, obstacles, graph,ranked_paths[:200])
+    plot_single_path(nodes, obstacles, graph,ranked_paths)
