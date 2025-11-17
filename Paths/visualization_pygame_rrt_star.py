@@ -26,6 +26,8 @@ BG = (50, 50, 50)
 
 def load_img(path, treshold=0.8):
     img = Image.open(path).convert("L")
+
+    print('Loaded map image size:', img.size    )
     arr = np.array(img).astype(np.uint8)
     arr = (arr / 255.0)
     arr = (arr >= treshold).astype(np.uint8)
