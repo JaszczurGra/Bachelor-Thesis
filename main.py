@@ -8,7 +8,7 @@ import pygame
 
 # --- Configuration Constants ---
 MAX_ITERS = 1500000         # Maximum number of iterations for the planner
-TIME_STEP = 0.1 / 10.0          # Integration time step for dynamics propagation (s)
+TIME_STEP = 0.1 / 3.0          # Integration time step for dynamics propagation (s)
 PROPAGATION_TIME = 1 / 10.0   # Duration of control applied in one RRT step (s)
 SPARSE_RADIUS = 2.5  / 15.0  # The radius for sparsification (Witness radius)
 REWIRE_RADIUS = 10   # Radius to search for neighbors to rewire
@@ -41,10 +41,10 @@ class CarDynamics:
     State: [x, y, theta] (position and heading)
     Control: [velocity, steering_angle]
     """
-    def __init__(self, max_v=8.0, max_steer=math.pi/20):
+    def __init__(self, max_v=10.0, max_steer=math.pi/6):
         self.MAX_V = max_v        # Max linear velocity (m/s)
         self.MAX_STEER = max_steer # Max steering angle (radians)
-        self.L = 3.0  * 0.2           # Wheelbase of the car (m)
+        self.L = 3.0  * 0.6          # Wheelbase of the car (m)
 
     def propagate(self, state, control_input, dt):
         """
@@ -376,7 +376,7 @@ class SSTPlanner:
         return path_nodes[::-1] 
 
 
-    def plan(self, animation = True):
+    def plan(self, animation = False):
         """The main SST planning loop."""
         print(f"Starting SST Planning (Max Iterations: {MAX_ITERS})")
         
