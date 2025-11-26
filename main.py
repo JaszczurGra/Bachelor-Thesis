@@ -3,7 +3,7 @@ import random
 import copy
 from collections import deque
 
-from matplotlib import path, scale
+
 import pygame 
 
 # --- Configuration Constants ---
@@ -376,7 +376,7 @@ class SSTPlanner:
         return path_nodes[::-1] 
 
 
-    def plan(self, animation = False):
+    def plan(self, animation = True):
         """The main SST planning loop."""
         print(f"Starting SST Planning (Max Iterations: {MAX_ITERS})")
         
@@ -648,8 +648,8 @@ def main():
     ]
 
     obstacles = [
-        Obstacle(random.uniform(10,40), random.uniform(10,40), random.uniform(3,7), random.uniform(3,7)
-                 ) for _ in range(15)
+        Obstacle(random.uniform(0,50), random.uniform(0,50), random.uniform(3,7), random.uniform(3,7)
+                 ) for _ in range(20)
     ]
 
     print(f"Start: {start_state[0]:.1f}, {start_state[1]:.1f} | Goal: {goal_state[0]:.1f}, {goal_state[1]:.1f}")

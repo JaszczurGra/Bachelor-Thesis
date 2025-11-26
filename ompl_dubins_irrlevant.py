@@ -1,3 +1,7 @@
+
+
+# Author: Mark Moll
+
 from math import sin, cos, tan
 from functools import partial
 try:
@@ -6,8 +10,6 @@ try:
 except ImportError:
     # if the ompl module is not in the PYTHONPATH assume it is installed in a
     # subdirectory of the parent directory called "py-bindings."
-
-    print('IMPORT ERROR')
     from os.path import abspath, dirname, join
     import sys
     sys.path.insert(0, join(dirname(dirname(abspath(__file__))), 'py-bindings'))
@@ -22,10 +24,10 @@ def kinematicCarODE(q, u, qdot):
     qdot[1] = u[0] * sin(theta)
     qdot[2] = u[0] * tan(u[1]) / carLength
 
+
 def isStateValid(spaceInformation, state):
     # perform collision checking or check if other constraints are
     # satisfied
-    print (spaceInformation.satisfiesBounds(state))
     return spaceInformation.satisfiesBounds(state)
 
 def plan():
@@ -51,7 +53,6 @@ def plan():
     ss = oc.SimpleSetup(cspace)
     validityChecker = ob.StateValidityCheckerFn(partial(isStateValid, ss.getSpaceInformation()))
     ss.setStateValidityChecker(validityChecker)
-    ss().setup()
     ode = oc.ODE(kinematicCarODE)
     odeSolver = oc.ODEBasicSolver(ss.getSpaceInformation(), ode)
     propagator = oc.ODESolver.getStatePropagator(odeSolver)
