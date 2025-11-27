@@ -11,7 +11,7 @@ import time
 # Set up logging for OMPL
 # ou.setLogLevel(ou.L_INFO)
 
-MAX_RUNTIME = 1000.0  # seconds
+MAX_RUNTIME = 150.0  # seconds
 ROBOT_RADIUS = 0.2  
 
 class Obstacle():
@@ -201,8 +201,8 @@ def solve_planning_problem():
 
     # 3. CREATE SPACE INFORMATION (SI)
     si = oc.SpaceInformation(space, cspace)
-    si.setPropagationStepSize(0.01)
-    si.setMinMaxControlDuration(3, 10)  # Min 0.03s, Max 0.3s per control
+    si.setPropagationStepSize(0.05)
+    si.setMinMaxControlDuration(3, 20)  # Min 0.03s, Max 0.3s per control
 
 
     
@@ -244,7 +244,7 @@ def solve_planning_problem():
     start = ob.State(si)
     start()[0][0] = 1.0
     start()[0][1] = 1.0
-    start()[1].value = 0
+    start()[1].value = math.pi / 2.0
     start()[2][0] = 0.0
 
     print ("Defining the Goal State...")
@@ -325,9 +325,10 @@ def solve_planning_problem():
     planner = oc.SST(si)
     planner.setProblemDefinition(pdef)
     
-    #STT Parameters:
-    # planner.setPruningRadius(0.5)
-    # planner.setSelectionRadius(2.0)
+    #TODO STT Parameters:
+    # 1/10 of selection radius 
+    planner.setPruningRadius(0.2)
+    planner.setSelectionRadius(2.0)
 
 
     planner.setup()
