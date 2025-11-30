@@ -6,7 +6,7 @@ import math
 from functools import partial
 from ompl import geometric as og # needed for asGeometric()
 from base_pathfind_classes import Obstacle,Robot
-
+from base_pathfind_classes import KinematicGoalRegion
 import time 
 
 import matplotlib.pyplot as plt
@@ -17,46 +17,17 @@ import io
 import ompl.util as ou
 ou.setLogLevel(ou.LOG_NONE) 
 
-# Set up logging for OMPL
-# ou.setLogLevel(ou.L_INFO)
 
-class KinematicGoalRegion(ob.Goal):
-    def __init__(self, si, goal_state, threshold=0.5):
-        # super(KinematicGoalRegion, self).__init__(si)
-        super().__init__(si)
-        self.si_ = si
-        self.goal_state_ = goal_state
-        self.threshold_ = threshold
-
-    def isSatisfied(self, state):
-        # Check position proximity
-        x_diff = state[0][0] - self.goal_state_[0]
-        y_diff = state[0][1] - self.goal_state_[1]
-
-        pos_dist = math.sqrt(x_diff**2 + y_diff**2)
-
-        # Check velocity
-        # v_actual = state[3]
-        # v_goal = self.goal_state_[3]
-        # v_dist = abs(v_actual - v_goal)
-
-        return pos_dist <= self.threshold_ # and v_dist <= 0.1 # Must be stopped and close
-
-    def distanceGoal(self, state):
-        x_diff = state[0][0] - self.goal_state_[0]
-        y_diff = state[0][1] - self.goal_state_[1]
-
-        pos_dist = math.sqrt(x_diff**2 + y_diff**2)
-        
-        # v_dist = abs(state[3] - self.goal_state_[3])
-        
-        # Combine distances (simple sum)
-        return pos_dist  # + v_dist
+#TODO 
+#robot as squere 
+#penelty for velocity in goal region
+#different planners
 
 
 
-class CarOMPL_acceleration:
-    def __init__(self,robot=None,Obstacles=None,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=30.0, propagate_step_size=0.02, control_duration=(3,40)):
+
+class SSTCarOMPL_acceleration:
+    def __init__(self,robot=None,Obstacles=None,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=30.0, propagate_step_size=0.02, control_duration=(3,40), selection_radius=2.0, pruning_radius=0.2):
         robot = robot if robot is not None else Robot()
         self.robot_radius = robot.radius
         self.wheelbase = robot.wheelbase
@@ -72,6 +43,9 @@ class CarOMPL_acceleration:
         self.solved_path = None
         self.propagate_step_size = propagate_step_size
         self.control_duration = control_duration  # (min_steps, max_steps)
+        self.selection_radius = selection_radius
+        self.pruning_radius = pruning_radius
+
 
 
     def is_state_valid(self,si, state):
@@ -271,12 +245,6 @@ class CarOMPL_acceleration:
         pdef = ob.ProblemDefinition(si)
 
 
-        #TODO
-        # void 	samplesPerSecond (double &uniform, double &near, double &gaussian, unsigned int attempts) const
-        # Estimate the number of samples that can be drawn per second, using the sampler returned by allocStateSampler()
-
-
-
         start = ob.State(si)
         start()[0][0] = 1.0
         start()[0][1] = 1.0
@@ -310,22 +278,21 @@ class CarOMPL_acceleration:
                 return ob.Cost(1.0) 
 
         #TODO STT Parameters:
-        # pdef.setOptimizationObjective(MinimizeTimeObjective(si))
-        # pdef.setOptimizationObjective(ob.StateCostIntegralObjective(si, True))
+        pdef.setOptimizationObjective(MinimizeTimeObjective(si))
+        pdef.setOptimizationObjective(ob.StateCostIntegralObjective(si, True))
 
-        planner = oc.RRT(si)
+        planner = oc.SST(si)
         planner.setProblemDefinition(pdef)
         #TODO STT Parameters:
         # 1/10 of selection radius 
-        # planner.setPruningRadius(0.2)
-        # planner.setSelectionRadius(2.0)
+        planner.setPruningRadius(self.pruning_radius)
+        planner.setSelectionRadius(self.selection_radius)
 
 
         planner.setup()
 
 
         solved = planner.solve(max_runtime)
-
         if solved:
 
             path_control = pdef.getSolutionPath()
@@ -341,9 +308,14 @@ class CarOMPL_acceleration:
             # plt.show()
             self.solved_path = path_control.asGeometric().printAsMatrix()
 
-        return solved
+        return solved 
 
-    def visualize(self, ax,path_data_str=None):
+    def visualize_with_labels(self, ax=None, path_data_str=None):
+        pass
+
+    def visualize(self, ax=None, path_data_str=None):
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 8))
 
         if path_data_str is None:
             if self.solved_path is None:
@@ -386,9 +358,7 @@ class CarOMPL_acceleration:
         # 2. Plot Setup
         ax.set_xlim(0, X_MAX)
         ax.set_ylim(0, Y_MAX)
-        ax.set_aspect('equal', adjustable='box')
-        ax.set_xlabel("X Position (m)")
-        ax.set_ylabel("Y Position (m)")
+        # ax.set_aspect('equal', adjustable='box')
         # ax.set_title("OMPL Car Trajectory (X-Y Plane)")
         ax.grid(True, linestyle='--', alpha=0.5)
 
@@ -405,47 +375,36 @@ class CarOMPL_acceleration:
                                         color='red', alpha=0.3, label='Obstacle')
                 ax.add_patch(obstacle)
 
-        # x_min, y_min = OBSTACLE_RECT[0]
-        # x_max, y_max = OBSTACLE_RECT[1]
-        # obstacle = plt.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min, 
-        #                         color='red', alpha=0.3, label='Obstacle')
-        ax.add_patch(obstacle)
 
-        # Start Point
         ax.plot(self.start_point[0], self.start_point[1], 'o', color='green', markersize=10, label='Start')
-
-        # Goal Region (Circle for visual clarity of the threshold)
         goal_circle = plt.Circle(self.goal_point, self.goal_threshold, color='blue', alpha=0.2, label='Goal Region')
         ax.add_patch(goal_circle)
         ax.plot(self.goal_point[0], self.goal_point[1], 'x', color='blue', markersize=8, label='Goal Center')
-
-        # 4. Plot Path
-        
-        # Trajectory Line
         ax.plot(x_coords, y_coords, color='black', linewidth=2, linestyle='-', label='Planned Path')
-        
-        # Trajectory Points (Nodes)
         ax.plot(x_coords, y_coords, 'o', color='black', markersize=4, alpha=0.6)
 
-        # Optional: Plot Car Orientation (Theta) using arrows
         if theta_angles is not None:
-            # Plot every 3rd point for cleaner visualization
+
             skip = max(1, len(x_coords) // 10) 
             ax.quiver(x_coords[::skip], y_coords[::skip], 
                     np.cos(theta_angles[::skip]), np.sin(theta_angles[::skip]),
                     color='purple', scale=20, width=0.005, headwidth=5, label='Orientation')
 
-        # 5. Show Legend and Plot
-        # Add a legend, but filter out redundant labels (e.g., from multiple 'Orientation' entries)
-        handles, labels = ax.get_legend_handles_labels()
-        unique_labels = dict(zip(labels, handles))
-        ax.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
-
+  
+        # Create legend with robot parameters
+        # legend_text = (f'Radius: {self.robot_radius:.2f}m\n'
+        #               f'Wheelbase: {self.wheelbase:.2f}m\n'
+        #               f'Max Velocity: {self.max_velocity:.2f}m/s')
+        # ax.text(0.02, -0.1, legend_text, transform=ax.transAxes, 
+        #        verticalalignment='top', fontsize=9,
+        #        bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.8))
 
 
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    car_planner = CarOMPL_acceleration()
-    print(car_planner.solve(30))
+    car_planner = SSTCarOMPL_acceleration()
+    print(car_planner.solve(10))
+    car_planner.visualize()
+    plt.show()
 

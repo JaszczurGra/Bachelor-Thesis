@@ -1,4 +1,5 @@
-from RRT_ompl_car_acceleration_class import CarOMPL_acceleration
+from RRT_acceleration import CarOMPL_acceleration
+from STRRT_acceleration import SSTCarOMPL_acceleration
 import time 
 from multiprocessing import Pool, cpu_count,Manager
 from base_pathfind_classes import Robot,Obstacle
@@ -6,7 +7,16 @@ from base_pathfind_classes import Robot,Obstacle
 import matplotlib.pyplot as plt
 import math
 
+import argparse
+import random
 
+from ompl import base as ob 
+
+parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
+parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
+parser.add_argument('-r', '--runs_per_planner', type=int, default=5, help='Number of runs per planner')
+parser.add_argument('-t', '--max_runtime', type=float, default=3.0, help='Maximum runtime per planner run (seconds)')
+args = parser.parse_args()
 
 
 def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner):
@@ -19,14 +29,23 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         
         robot = Robot()
 
+        robot.radius = random.uniform(0.1,0.3)
+        robot.wheelbase = random.uniform(0.3,1.2)
+        robot.max_velocity = random.uniform(5.0,25.0)
+     
+     
         obstacles = []
-        for obs in [(4.0, 6.0, 4.0, 6.0), (2.0, 3.0, 7.0, 8.0), (7.0, 8.0, 2.0, 3.0),(6.5, 7.0, 2.0, 5.0)]:
+        for obs in [(4.0, 6.0, 4.0, 6.0), (2.0, 3.0, 7.0, 8.0), (7.0, 8.0, 2.0, 3.0),(6.5, 7.0, 2.0, 5.0), (2.0, 5.0, 2.0, 2.5), (5.0, 9.0, 7.0, 7.5), (1.0, 3.0, 4.0, 5.0), (7.0, 9.0, 1.0, 2.0)]:
             obstacles.append(Obstacle(*obs))
-
-
-        car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
-        solved = car_planner.solve(max_runtime)
         
+        # obstacles = random.sample(obstacles, k=random.randint(1,len(obstacles)))
+
+       # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 2, pruning_radius=random.uniform(0.05,0.6))
+       
+       
+       
+        solved = car_planner.solve(max_runtime)
         elapsed = time.time() - start_time
         
         print(f"[Planner {planner_id}] Run #{run_count} finished in {elapsed:.2f}s. Success: {solved}")
@@ -35,7 +54,16 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         result_list[planner_id] = {
             'planner': car_planner,
             'timestamp': time.time(),
-            'run': run_count
+            'run': run_count, 
+            'randomized_params': {
+                'robot_radius': robot.radius,
+                'wheelbase': robot.wheelbase,
+                'max_velocity': robot.max_velocity,
+                # 'pruning_radius': car_planner.pruning_radius,
+                'selection_radius': car_planner.selection_radius,
+            }
+            #TODO count exact solutions 
+            # 'exact': solved is ob.PlannerStatus.EXACT_SOLUTION,
         }
         
         run_count += 1
@@ -53,7 +81,7 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     n_cols = math.ceil(math.sqrt(n_plots))
     n_rows = math.ceil(n_plots / n_cols)
     
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 5*n_rows))
+    fig, axs = plt.subplots(n_rows, n_cols)#, figsize=(5 * n_cols, 5 * n_rows))
     fig.suptitle(f'OMPL Car Planning - Continuous ({runs_per_planner} runs each)', fontsize=16)
     
     # Flatten axes
@@ -91,6 +119,8 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     total_expected = num_threads * runs_per_planner
     total_drawn = 0
     
+    exact_solutions = 0 
+
     with Pool(processes=num_cores) as pool:
         # Start all continuous planners
         async_results = [
@@ -108,7 +138,12 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
                 if result is not None and result['timestamp'] > last_timestamps[i]:
                     last_timestamps[i] = result['timestamp']
                     total_drawn += 1
-                    
+
+                    # if result['exact']:
+                    #     exact_solutions += 1
+                    #     print(f'FOUND EXACT SOLUTION NR. {exact_solutions}')
+
+                    #TODO save to file, map and path 
                     ax = axs_flat[i]
                     
                     ax.clear()
@@ -119,11 +154,21 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
                     result['planner'].visualize(ax)
                     ax.set_title(f'Planner {i} - Run {result["run"]}')
                     
-                    fig.canvas.draw()
-                    fig.canvas.flush_events()
-                    plt.pause(0.01)
+
+                    handles, labels = ax.get_legend_handles_labels()
+                    unique_labels = dict(zip(labels, handles))
+                    fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
+
                     
-            
+                    legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['randomized_params'].items())
+                    ax.text(0.02, -0.1, legend_text, transform=ax.transAxes, 
+                        verticalalignment='top', fontsize=9,
+                        bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.8))
+
+
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            plt.pause(0.01)
             time.sleep(0.1)  # Polling interval
         
         # Signal stop (shouldn't be needed since each planner stops after N runs)
@@ -137,5 +182,5 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
 
 
 if __name__ == "__main__":
-    run_parallel(9,10,50)
+    run_parallel(args.num_threads, args.runs_per_planner, args.max_runtime)
 
