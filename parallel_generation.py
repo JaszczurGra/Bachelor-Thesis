@@ -1,5 +1,6 @@
 from RRT_acceleration import CarOMPL_acceleration
 from STRRT_acceleration import SSTCarOMPL_acceleration
+from  Dubins import Dubins_pathfinding
 import time 
 from multiprocessing import Pool, cpu_count,Manager
 from base_pathfind_classes import Robot,Obstacle
@@ -33,40 +34,43 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot.wheelbase = random.uniform(0.3,1.2)
         robot.max_velocity = random.uniform(5.0,25.0)
      
-     
+
+
+
         obstacles = []
         for obs in [(4.0, 6.0, 4.0, 6.0), (2.0, 3.0, 7.0, 8.0), (7.0, 8.0, 2.0, 3.0),(6.5, 7.0, 2.0, 5.0), (2.0, 5.0, 2.0, 2.5), (5.0, 9.0, 7.0, 7.5), (1.0, 3.0, 4.0, 5.0), (7.0, 9.0, 1.0, 2.0)]:
             obstacles.append(Obstacle(*obs))
-        
-        # obstacles = random.sample(obstacles, k=random.randint(1,len(obstacles)))
-
-       # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
-        car_planner = SSTCarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 2, pruning_radius=random.uniform(0.05,0.6))
+        obstacles = [Obstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,7))]
+      
+      
+        # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
+        # car_planner = Dubins_pathfinding(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=max_runtime)
        
        
-       
-        solved = car_planner.solve(max_runtime)
+        solved = car_planner.solve()
         elapsed = time.time() - start_time
-        
-        print(f"[Planner {planner_id}] Run #{run_count} finished in {elapsed:.2f}s. Success: {solved}")
-        
-        # Store result at this planner's slot
-        result_list[planner_id] = {
-            'planner': car_planner,
-            'timestamp': time.time(),
-            'run': run_count, 
-            'randomized_params': {
-                'robot_radius': robot.radius,
-                'wheelbase': robot.wheelbase,
-                'max_velocity': robot.max_velocity,
-                # 'pruning_radius': car_planner.pruning_radius,
-                'selection_radius': car_planner.selection_radius,
-            }
-            #TODO count exact solutions 
-            # 'exact': solved is ob.PlannerStatus.EXACT_SOLUTION,
-        }
-        
         run_count += 1
+        
+        print(f"[Planner {planner_id}] Run #{run_count} finished in {elapsed:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")
+        
+        if solved is not None: 
+        # Store result at this planner's slot
+            result_list[planner_id] = {
+                'planner': car_planner,
+                'timestamp': time.time(),
+                'run': run_count, 
+                'randomized_params': {
+                    'robot_radius': robot.radius,
+                    'wheelbase': robot.wheelbase,
+                    'max_velocity': robot.max_velocity,
+                    # 'pruning_radius': car_planner.pruning_radius,
+                    # 'selection_radius': car_planner.selection_radius,
+                }
+                #TODO count exact solutions 
+                # 'exact': solved is ob.PlannerStatus.EXACT_SOLUTION,
+            }
+        
     
     print(f"[Planner {planner_id}] Completed all {runs_per_planner} runs")
 
@@ -74,8 +78,8 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
 
 def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
-
-
+    num_threads = min(num_threads, cpu_count() - 1) 
+    print(cpu_count())
     plt.ion()
     n_plots = num_threads
     n_cols = math.ceil(math.sqrt(n_plots))
@@ -83,7 +87,7 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     
     fig, axs = plt.subplots(n_rows, n_cols)#, figsize=(5 * n_cols, 5 * n_rows))
     fig.suptitle(f'OMPL Car Planning - Continuous ({runs_per_planner} runs each)', fontsize=16)
-    
+    # fig.set_facecolor('#2e2e2e')
     # Flatten axes
     if n_plots == 1:
         axs_flat = [axs]
@@ -97,6 +101,7 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
         ax.set_title(f'Planner {idx} - waiting...')
         ax.set_xlim(0, 10)
         ax.set_ylim(0, 10)
+        # ax.set_facecolor('#aaaaaa')
         ax.grid(True, alpha=0.3)
         if idx >= num_threads:
             ax.set_visible(False)
@@ -166,10 +171,10 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
                         bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.8))
 
 
-            fig.canvas.draw()
-            fig.canvas.flush_events()
+                    fig.canvas.draw()
+                    fig.canvas.flush_events()
             plt.pause(0.01)
-            time.sleep(0.1)  # Polling interval
+            time.sleep(0.0001)  # Polling interval
         
         # Signal stop (shouldn't be needed since each planner stops after N runs)
         stop_event.set()

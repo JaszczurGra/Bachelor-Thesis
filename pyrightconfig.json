@@ -1,0 +1,8 @@
+{
+
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "include": ["."],
+  "stubPath": "./stubs",
+  "extraPaths": ["./stubs"]
+}
