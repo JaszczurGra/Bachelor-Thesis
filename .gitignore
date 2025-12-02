@@ -209,7 +209,7 @@ __marimo__/
 token.txt
 data/ 
 
-Path_generation\
-Kinodynamic_Path_Planning\
-CPP\
-OLD\
+
+CPP/
+OLD/
+stubs/
