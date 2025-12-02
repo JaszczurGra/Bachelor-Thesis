@@ -61,16 +61,32 @@ class BasePathfinding():
             ax.quiver(x_coords[::skip], y_coords[::skip], 
                     np.cos(theta_angles[::skip]), np.sin(theta_angles[::skip]),
                     color='purple', scale=20, width=0.005, headwidth=5, label='Orientation')
-            
+        
+        self.robot.draw(ax, data[0, :])  # Draw robot at start
+        self.robot.draw(ax, data[-1, :])  # Draw robot at goal
+
         if show:
             plt.show()
 
 
 
+
+
 class Obstacle():
-    def __init__(self, x, y, w, h):
+    def __init__(self, x, y):
         self.x = x
         self.y = y
+
+    def contains(self, x, y, r):
+        return False
+    
+    def draw(self, ax):
+        pass
+
+
+class RectangleObstacle(Obstacle):
+    def __init__(self, x, y,w,h):
+        super().__init__(x, y)
         self.w = w
         self.h = h
 
@@ -80,6 +96,19 @@ class Obstacle():
     def draw(self, ax):
         rect = plt.Rectangle((self.x, self.y), self.w, self.h, color='gray')
         ax.add_patch(rect)
+
+class CircleObstacle(Obstacle):
+    def __init__(self, x, y, radius):
+        super().__init__(x, y)
+        self.radius = radius
+
+    def contains(self, x, y, r):
+        return (x - self.x) ** 2 + (y - self.y) ** 2 <= (self.radius + r) ** 2
+    
+    def draw(self, ax):
+        circle = plt.Circle((self.x, self.y), self.radius, color='gray')
+        ax.add_patch(circle)
+
 
 class Robot():
     def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
@@ -99,6 +128,10 @@ class Robot():
         x = state[0][0]
         y = state[0][1]
         return any(obs.contains(x, y,self.radius) for obs in obstacles)
+    
+    def draw(self, ax, state):
+        circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.5)
+        ax.add_patch(circle)
 
 class KinematicGoalRegion(ob.Goal):
     def __init__(self, si, goal_state, threshold=0.5):
