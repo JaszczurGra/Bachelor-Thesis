@@ -140,34 +140,39 @@ class Robot():
         circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.5)
         ax.add_patch(circle)
 
+
+
 class KinematicGoalRegion(ob.Goal):
-    def __init__(self, si, goal_state, threshold=0.5):
+    def __init__(self, si, goal_state, pos_threshold=0.5):
         super().__init__(si)
-        self.si_ = si
         self.goal_state_ = goal_state
-        self.threshold_ = threshold
+        self.pos_threshold = pos_threshold
 
     def isSatisfied(self, state):
-        # Check position proximity
-        x_diff = state[0][0] - self.goal_state_[0]
-        y_diff = state[0][1] - self.goal_state_[1]
-
-        pos_dist = math.sqrt(x_diff**2 + y_diff**2)
-
-        # Check velocity
-        # v_actual = state[3]
-        # v_goal = self.goal_state_[3]
-        # v_dist = abs(v_actual - v_goal)
-
-        return pos_dist <= self.threshold_ # and v_dist <= 0.1 # Must be stopped and close
-
+        return  self.distanceGoal(state) <= self.pos_threshold
     def distanceGoal(self, state):
-        x_diff = state[0][0] - self.goal_state_[0]
-        y_diff = state[0][1] - self.goal_state_[1]
+        return  math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
+    
+class KinematicGoalRegionWithVelocity(KinematicGoalRegion):
+    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=3.0,velocity_weight=0.01):
+        super().__init__(si, goal_state, pos_threshold)
+        self.vel_threshold = velocity_threshold
+        self.velocity_weight = velocity_weight  
 
-        pos_dist = math.sqrt(x_diff**2 + y_diff**2)
+    def isSatisfied(self, state):
+ 
+        pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
+
+        if self.vel_threshold:
+            v_actual = state[2][0]
+            v_goal = self.goal_state_[2]
+            v_dist = abs(v_actual - v_goal)
+            return pos_dist <= self.pos_threshold   and v_dist <= self.vel_threshold # Must be stopped and close
         
-        # v_dist = abs(state[3] - self.goal_state_[3])
+        return pos_dist <= self.pos_threshold
+    def distanceGoal(self, state):
+        pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
+        if self.vel_threshold:
+            return pos_dist  + abs(state[2][0] - self.goal_state_[2]) * self.velocity_weight
         
-        # Combine distances (simple sum)
-        return pos_dist  # + v_dist
+        return pos_dist

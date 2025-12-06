@@ -39,9 +39,11 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot = Robot()
 
         robot.radius = random.uniform(0.2,0.4)
-        robot.wheelbase = random.uniform(0.3,1.2) * 4
-        robot.max_velocity = random.uniform(5.0,25.0)
+        robot.wheelbase = random.uniform(0.3,1.2) 
+        robot.max_velocity = random.uniform(10,20)
         robot.wheelbase = 0.3
+        robot.acceleration = 2
+
 
 
         obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
@@ -50,14 +52,13 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
       
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
         
-        car_planner = SSTCarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime)
         # car_planner = Dubins_pathfinding(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=max_runtime)
         # car_planner = STRRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
        
         # car_planner = RRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
        
         solved = car_planner.solve()
-        elapsed = time.time() - start_time
         run_count += 1
         
         # print(f"[Planner {planner_id}] Run #{run_count} finished in {elapsed:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")

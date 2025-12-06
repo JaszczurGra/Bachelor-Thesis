@@ -3,7 +3,7 @@ import ompl.control as oc
 import ompl.util as ou
 import math
 from functools import partial
-from base_pathfind_classes import Robot, KinematicGoalRegion,BasePathfinding
+from base_pathfind_classes import KinematicGoalRegionWithVelocity, Robot, KinematicGoalRegion,BasePathfinding
 import numpy as np
 
 import ompl.util as ou
@@ -19,13 +19,18 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 class SSTCarOMPL_acceleration(BasePathfinding):
-    def __init__(self,robot=Robot(),Obstacles=[],start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5, bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None,interpolation_steps=100):
-        super().__init__(robot, Obstacles, start, goal,bounds,max_runtime,goal_treshold=goal_treshold) 
+    def __init__(self,robot=Robot(),Obstacles=[],start=(1.0,1.0),goal=(9.0,9.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0, vel_threshold=4, pos_treshold=0.5):
+        """
+        set the velocity weight to 0 to ignore velocity in goal region
+        """
+        super().__init__(robot, Obstacles, start, goal,bounds,max_runtime,goal_treshold=pos_treshold) 
         self.propagate_step_size = propagate_step_size
         self.control_duration = control_duration  # (min_steps, max_steps)
         self.pruning_radius = pruning_radius
         self.selection_radius = selection_radius
-        self.interpolation_steps = interpolation_steps
+        self.velocity_weight = velocity_weight
+        self.vel_threshold = vel_threshold
+        self.pos_treshold = pos_treshold
 
         if selection_radius is None:    
             self.selection_radius = self.robot.max_velocity * self.propagate_step_size * self.control_duration[1] * 2
@@ -124,28 +129,12 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         goal()[0][0], goal()[0][1] = self.goal_point
         goal()[1].value, goal()[2][0] = (0.0, 0.0)
 
-
-        goal_region = KinematicGoalRegion(si, goal, threshold=0.5)
+        goal_region = KinematicGoalRegion(si, goal, pos_threshold=self.pos_treshold)
+        if self.velocity_weight > 0:
+            goal_region = KinematicGoalRegionWithVelocity(si, goal, pos_threshold=self.pos_treshold,velocity_threshold=self.vel_threshold,velocity_weight=self.velocity_weight)
         pdef.setStartAndGoalStates (start,goal)
         pdef.setGoal(goal_region)
 
-
-        # class MinimizeTimeObjective(ob.StateCostIntegralObjective):
-        #     def __init__(self, si):
-        #         super().__init__(si, True) 
-
-        #     def motionCost(self, s1, s2):
-        #         """
-        #         Returns the cost of the motion between s1 and s2.
-        #         For a minimum time objective, the cost is the duration (time).
-                
-        #         The difference between s2 and s1 is the total time elapsed. 
-        #         OMPL tracks the duration of the control segment that generated this motion.
-        #         """
-
-        #         return ob.Cost(1.0) 
-
-        # pdef.setOptimizationObjective(MinimizeTimeObjective(si))
         pdef.setOptimizationObjective(ob.StateCostIntegralObjective(si, True))
 
         planner = oc.SST(si)
@@ -158,7 +147,6 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 
         solved = planner.solve(self.max_runtime)
-
         if solved:
             pdef.getSolutionPath().interpolate()
             # pdef.getSolutionPath().setResolution(0.001)
@@ -170,7 +158,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    car_planner = SSTCarOMPL_acceleration(max_runtime=3)
+    car_planner = SSTCarOMPL_acceleration(max_runtime=15)
     print(car_planner.solve())
     car_planner.visualize()
 

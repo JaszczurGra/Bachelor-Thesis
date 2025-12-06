@@ -83,7 +83,7 @@ class RRT_Planer(BasePathfinding):
 
         
 
-        goal_region = KinematicGoalRegion(si, goal, threshold=0.5)
+        goal_region = KinematicGoalRegion(si, goal, pos_threshold=0.5)
         pdef.setStartAndGoalStates (start,goal)
         pdef.setGoal(goal_region)
 

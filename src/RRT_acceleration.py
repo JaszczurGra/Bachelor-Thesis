@@ -122,7 +122,7 @@ class CarOMPL_acceleration(BasePathfinding):
         goal()[1].value, goal()[2][0] = (0.0, 0.0)
 
 
-        goal_region = KinematicGoalRegion(si, goal, threshold=0.5)
+        goal_region = KinematicGoalRegion(si, goal, pos_threshold=0.5)
         pdef.setStartAndGoalStates (start,goal)
         pdef.setGoal(goal_region)
 
