@@ -40,9 +40,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
         robot.radius = random.uniform(0.2,0.4)
         robot.wheelbase = random.uniform(0.3,1.2) 
-        robot.max_velocity = random.uniform(10,20)
+        robot.max_velocity = 14
         robot.wheelbase = 0.3
-        robot.acceleration = 2
+        robot.acceleration = 5
 
 
 
