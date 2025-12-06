@@ -6,6 +6,7 @@ import numpy as np
 
 class BasePathfinding():
     def __init__(self,robot=None,Obstacles=[],start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_treshold=0.0):
+        """bounds = (xmin,xmax,ymin,ymax)"""
         self.solved_path = None 
         self.obstacles = Obstacles
         self.robot = robot if robot is not None else Robot()
@@ -25,7 +26,7 @@ class BasePathfinding():
         return x >= self.bounds[0] and x <= self.bounds[1] and y >= self.bounds[2] and y <= self.bounds[3] and not any(obs.contains(x, y,self.robot.radius) for obs in self.obstacles)
 
 
-    def visualize(self, ax=None, path_data_str=None):
+    def visualize(self, ax=None, path_data_str=None,point_iteration=10,path_iteration=1,quiver_iteration=10):
         show = False
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 8))
@@ -38,8 +39,10 @@ class BasePathfinding():
 
         data = np.loadtxt(io.StringIO(path_data_str))   
 
+
         x_coords = data[:, 0]
         y_coords = data[:, 1]
+
         theta_angles = data[:, 2] if data.shape[1] > 2 else None
 
 
@@ -50,18 +53,22 @@ class BasePathfinding():
         for o in self.obstacles:
             o.draw(ax)
 
+
         ax.plot(self.goal_point[0], self.goal_point[1], 'x', color='blue', markersize=8, label='Goal Center')
         if self.goal_threshold > 0:
             ax.add_patch(plt.Circle(self.goal_point, self.goal_threshold, color='blue', alpha=0.2, label='Goal Region'))
-        ax.plot(x_coords, y_coords, color='black', linewidth=2, linestyle='-', label='Planned Path')
-        ax.plot(x_coords, y_coords, 'o', color='black', markersize=4, alpha=0.6)
+
+
+        points_indices = list(range(0, len(data) - 1, point_iteration)) + [len(data) - 1]
+        path_indices = list(range(0, len(data) - 1, path_iteration)) + [len(data) - 1]
+        ax.plot(x_coords[path_indices], y_coords[path_indices], color='black', linewidth=2, linestyle='-', label='Planned Path')
+        ax.plot(x_coords[points_indices], y_coords[points_indices], 'o', color='black', markersize=4, alpha=0.6)
 
         if theta_angles is not None:
-            skip = max(1, len(x_coords) // 10) 
-            ax.quiver(x_coords[::skip], y_coords[::skip], 
-                    np.cos(theta_angles[::skip]), np.sin(theta_angles[::skip]),
-                    color='purple', scale=20, width=0.005, headwidth=5, label='Orientation')
-        
+            quiver_indices = list(range(0, len(data) - 1, quiver_iteration)) + [len(data) - 1]
+            ax.quiver(x_coords[quiver_indices], y_coords[quiver_indices], 
+                    np.cos(theta_angles[quiver_indices]) , np.sin(theta_angles[quiver_indices]) ,
+                    color='purple', scale=12, width=0.005, headwidth=8, label='Orientation')
         self.robot.draw(ax, data[0, :])  # Draw robot at start
         self.robot.draw(ax, data[-1, :])  # Draw robot at goal
 

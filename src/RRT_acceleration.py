@@ -53,11 +53,11 @@ class CarOMPL_acceleration(BasePathfinding):
         MAX_DELTA = self.robot.max_steering_at_zero_v -  np.clip(state[3] / self.robot.max_velocity, 0.0, 1.0) * (self.robot.max_steering_at_zero_v - self.robot.max_steering_at_max_v)
         delta = np.clip(control[1], -MAX_DELTA, MAX_DELTA)
    
-        result[0] = state[0] + state[3] * math.cos(state[2]) 
-        result[1] = state[1] + state[3] * math.sin(state[2])
-        result[2] = state[2] + (state[3] / self.robot.wheelbase) * math.tan(delta)
-        result[3] = np.clip(state[3] + control[0], 0.0, self.robot.max_velocity)
-
+        result[0] =  state[3] * math.cos(state[2])  
+        result[1] = state[3] * math.sin(state[2])  
+        result[2] = (state[3] / self.robot.wheelbase) * math.tan(delta) 
+        # result[3] = np.clip(control[0], 0.0, self.robot.max_velocity) 
+        result[3] = control[0]
 
     def solve(self):
         space = ob.CompoundStateSpace()
