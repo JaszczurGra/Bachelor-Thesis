@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class BasePathfinding():
-    def __init__(self,robot=None,Obstacles=[],start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_treshold=0.0):
+    def __init__(self,robot=None,map=None,start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_treshold=0.0):
         """bounds = (xmin,xmax,ymin,ymax)"""
         self.solved_path = None 
-        self.obstacles = Obstacles
+        self.map = map 
         self.robot = robot if robot is not None else Robot()
         self.start_point = start
         self.goal_point = goal
@@ -23,7 +23,7 @@ class BasePathfinding():
     def is_state_valid(self,si, state):
         x = state[0][0]
         y = state[0][1]
-        return x >= self.bounds[0] and x <= self.bounds[1] and y >= self.bounds[2] and y <= self.bounds[3] and not any(obs.contains(x, y,self.robot.radius) for obs in self.obstacles)
+        return x >= self.bounds[0] and x <= self.bounds[1] and y >= self.bounds[2] and y <= self.bounds[3] and not self.robot.check_collision(state,self.map)
 
 
     def visualize(self, ax=None, path_data_str=None,point_iteration=10,path_iteration=1,quiver_iteration=10):
@@ -50,9 +50,13 @@ class BasePathfinding():
         ax.set_ylim(self.bounds[2], self.bounds[3])
         ax.grid(True, linestyle='--', alpha=0.5)
 
-        for o in self.obstacles:
-            o.draw(ax)
 
+        #gray_r for reveresed
+        if self.map is not None:
+            ax.imshow(self.map, extent=self.bounds, origin='lower', cmap='gray', alpha=1)
+
+
+        # ax.plot(self.start_point[0], self.start_point[1], '*', color='red', markersize=15, label='Start Center')
 
         ax.plot(self.goal_point[0], self.goal_point[1], 'x', color='blue', markersize=8, label='Goal Center')
         if self.goal_threshold > 0:
@@ -79,42 +83,58 @@ class BasePathfinding():
 
 
 
-class Obstacle():
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
 
-    def contains(self, x, y, r):
-        return False
+
+# class Obstacle():
+#     def __init__(self, x, y):
+#         self.x = x
+#         self.y = y
+
+#     def contains(self, x, y, r):
+#         return False
     
-    def draw(self, ax):
-        pass
+#     # def contains(self, x, y, w,h):
+#     #     return False
+
+#     def draw(self, ax):
+#         pass
 
 
-class RectangleObstacle(Obstacle):
-    def __init__(self, x, y,w,h):
-        super().__init__(x, y)
-        self.w = w
-        self.h = h
+# class RectangleObstacle(Obstacle):
+#     def __init__(self, x, y,w,h):
+#         super().__init__(x, y)
+#         self.w = w
+#         self.h = h
 
-    def contains(self, x, y, r):
-        return self.x - r <= x  <= self.x + self.w  + r and self.y -r <= y <= self.y + self.h + r
+#     def contains(self, x, y, r):
+#         return self.x - r <= x  <= self.x + self.w  + r and self.y -r <= y <= self.y + self.h + r
     
-    def draw(self, ax):
-        rect = plt.Rectangle((self.x, self.y), self.w, self.h, color='gray')
-        ax.add_patch(rect)
-
-class CircleObstacle(Obstacle):
-    def __init__(self, x, y, radius):
-        super().__init__(x, y)
-        self.radius = radius
-
-    def contains(self, x, y, r):
-        return (x - self.x) ** 2 + (y - self.y) ** 2 <= (self.radius + r) ** 2
+#     # def contains(self, x, y, w,h,theta):
+#     #     # Check if rotated rectangle robot collides with obstacle rectangle
+#     #     corners = [
+#     #         (x - w * math.cos(theta) - h * math.sin(theta), y - w * math.sin(theta) + h * math.cos(theta)),
+#     #         (x + w * math.cos(theta) - h * math.sin(theta), y + w * math.sin(theta) + h * math.cos(theta)),
+#     #         (x + w * math.cos(theta) + h * math.sin(theta), y + w * math.sin(theta) - h * math.cos(theta)),
+#     #         (x - w * math.cos(theta) + h * math.sin(theta), y - w * math.sin(theta) - h * math.cos(theta))
+#     #     ]
+#     #     return any(self.x - 0.1 <= cx <= self.x + self.w + 0.1 and self.y - 0.1 <= cy <= self.y + self.h + 0.1 for cx, cy in corners)
     
-    def draw(self, ax):
-        circle = plt.Circle((self.x, self.y), self.radius, color='gray')
-        ax.add_patch(circle)
+
+#     def draw(self, ax):
+#         rect = plt.Rectangle((self.x, self.y), self.w, self.h, color='gray')
+#         ax.add_patch(rect)
+
+# class CircleObstacle(Obstacle):
+#     def __init__(self, x, y, radius):
+#         super().__init__(x, y)
+#         self.radius = radius
+
+#     def contains(self, x, y, r):
+#         return (x - self.x) ** 2 + (y - self.y) ** 2 <= (self.radius + r) ** 2
+    
+#     def draw(self, ax):
+#         circle = plt.Circle((self.x, self.y), self.radius, color='gray')
+#         ax.add_patch(circle)
 
 
 class Robot():
@@ -131,15 +151,73 @@ class Robot():
         y = state[0][1]
         return x >= bounds[0] + self.radius and x <= bounds[1] - self.radius and y >= bounds[2] + self.radius and y <= bounds[3] - self.radius
     
-    def check_collision(self,state,obstacles):
+    def check_collision(self,state,map):
         x = state[0][0]
         y = state[0][1]
-        return any(obs.contains(x, y,self.radius) for obs in obstacles)
+
+        map_height, map_width = map.shape
+        
+        # Convert world coordinates to pixel coordinates
+        # Assuming map covers bounds (0, 10, 0, 10)
+        world_width = 10
+        world_height = 10
+        
+        px = int((x / world_width) * map_width)
+        py = int(( (y / world_height)) * map_height)  # Flip y-axis
+
+        radius_px = int((self.radius / world_width) * map_width)
+        
+        # Check if robot center is out of bounds
+        if px < 0 or px >= map_width or py < 0 or py >= map_height:
+            return True
+        
+        # Check circular area around robot center
+        for dy in range(-radius_px, radius_px + 1):
+            for dx in range(-radius_px, radius_px + 1):
+                # Only check points within the circle
+                if dx*dx + dy*dy <= radius_px*radius_px:
+                    check_x = px + dx
+                    check_y = py + dy
+                    
+                    # Check bounds
+                    if 0 <= check_x < map_width and 0 <= check_y < map_height:
+                        # Check if pixel is black (obstacle) - value 0 in binary image
+                        if map[check_y, check_x] == 0:
+                            return True
+        
+        return False
     
     def draw(self, ax, state):
         circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.5)
         ax.add_patch(circle)
 
+    def print_info(self):
+        return {
+            'radius': self.radius,
+            'wheelbase': self.wheelbase,
+            'max_velocity': self.max_velocity,
+            'max_steering_at_zero_v': self.max_steering_at_zero_v,
+            'max_steering_at_max_v': self.max_steering_at_max_v,
+            'acceleration': self.acceleration
+        }
+
+
+class RectangleRobot(Robot):
+    def __init__(self, width=0.5, length=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
+        super().__init__(0,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration)
+        self.width = width
+        self.length = length
+
+
+    def draw(self, ax, state):
+        rect = plt.Rectangle((state[0] - self.width, state[1] - self.length), 2*self.width, 2*self.length, angle=math.degrees(state[2]), color='green', alpha=0.5)
+        ax.add_patch(rect)
+
+    def check_collision(self,state,obstacles):
+        diag_radius = math.sqrt(self.width**2 + self.length**2)
+        x = state[0][0]
+        y = state[0][1]
+        return any(obs.contains(x, y, diag_radius) for obs in obstacles)
 
 
 class KinematicGoalRegion(ob.Goal):

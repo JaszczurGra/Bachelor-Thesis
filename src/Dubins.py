@@ -24,8 +24,8 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 class Dubins_pathfinding(BasePathfinding):
-    def __init__(self,robot=Robot(),Obstacles=[],start=(1.0,1.0),goal=(9.0,9.0),max_runtime=30.0,bounds=(0,10,0,10),interpolate_steps=50):
-        super().__init__(robot, Obstacles, start, goal, bounds, max_runtime) 
+    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=30.0,bounds=(0,10,0,10),interpolate_steps=50):
+        super().__init__(robot, map, start, goal, bounds, max_runtime) 
         self.interpolate_steps = interpolate_steps
 
     def solve(self):

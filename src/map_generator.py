@@ -1,6 +1,10 @@
 import os
 import random
 from PIL import Image, ImageDraw    
+
+
+#Map of viable spaces 
+
 class MapGenerator:
     def __init__(self, num_rect_obstacles=(5, 9), num_circle_obstacles=(0, 0), 
                  image_size=(500, 500)):

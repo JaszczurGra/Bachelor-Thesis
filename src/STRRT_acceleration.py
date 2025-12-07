@@ -19,11 +19,11 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 class SSTCarOMPL_acceleration(BasePathfinding):
-    def __init__(self,robot=Robot(),Obstacles=[],start=(1.0,1.0),goal=(9.0,9.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0, vel_threshold=4, pos_treshold=0.5):
+    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0),goal=(9.0,9.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0, vel_threshold=4, pos_treshold=0.5):
         """
         set the velocity weight to 0 to ignore velocity in goal region
         """
-        super().__init__(robot, Obstacles, start, goal,bounds,max_runtime,goal_treshold=pos_treshold) 
+        super().__init__(robot, map, start, goal,bounds,max_runtime,goal_treshold=pos_treshold) 
         self.propagate_step_size = propagate_step_size
         self.control_duration = control_duration  # (min_steps, max_steps)
         self.pruning_radius = pruning_radius
@@ -41,7 +41,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 
     def is_state_valid(self,si, state):
-        return self.robot.check_bounds(state,self.bounds) and not self.robot.check_collision(state,self.obstacles)
+        return self.robot.check_bounds(state,self.bounds) and not self.robot.check_collision(state,self.map)
     
 
     def propagate(self,state, control, result):
@@ -113,6 +113,8 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         #TODO add adaptive ode solver
         ode = oc.ODE(self.propagate)
         odeSolver = oc.ODEBasicSolver(si, ode)
+        odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
+
         propagator = oc.ODESolver.getStatePropagator(odeSolver)
         si.setStatePropagator(propagator)
     
@@ -158,7 +160,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    car_planner = SSTCarOMPL_acceleration(max_runtime=15)
+    car_planner = SSTCarOMPL_acceleration(max_runtime=3, map=np.ones((100,100)))
     print(car_planner.solve())
     car_planner.visualize()
 
