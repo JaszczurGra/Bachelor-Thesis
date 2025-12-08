@@ -2,6 +2,8 @@ import io
 import math
 from ompl import base as ob
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+from scipy.ndimage import binary_dilation
 import numpy as np
 
 class BasePathfinding():
@@ -10,6 +12,7 @@ class BasePathfinding():
         self.solved_path = None 
         self.map = map 
         self.robot = robot if robot is not None else Robot()
+        self.robot.set_map(map)
         self.start_point = start
         self.goal_point = goal
         self.bounds = bounds
@@ -21,9 +24,7 @@ class BasePathfinding():
     
 
     def is_state_valid(self,si, state):
-        x = state[0][0]
-        y = state[0][1]
-        return x >= self.bounds[0] and x <= self.bounds[1] and y >= self.bounds[2] and y <= self.bounds[3] and not self.robot.check_collision(state,self.map)
+        return self.robot.check_bounds(state,self.bounds) and not self.robot.check_collision(state)
 
 
     def visualize(self, ax=None, path_data_str=None,point_iteration=10,path_iteration=1,quiver_iteration=10):
@@ -68,8 +69,16 @@ class BasePathfinding():
 
         points_indices = list(range(0, len(data) - 1, point_iteration)) + [len(data) - 1]
         path_indices = list(range(0, len(data) - 1, path_iteration)) + [len(data) - 1]
-        ax.plot(x_coords[path_indices], y_coords[path_indices], color='black', linewidth=2, linestyle='-', label='Planned Path')
-        ax.plot(x_coords[points_indices], y_coords[points_indices], 'o', color='black', markersize=4, alpha=0.6)
+
+        # LineCollection for path
+        path_points = np.column_stack([x_coords[path_indices], y_coords[path_indices]])
+        path_segments = np.stack([path_points[:-1], path_points[1:]], axis=1)
+        lc = LineCollection(path_segments, colors='black', linewidths=2, label='Planned Path')
+        ax.add_collection(lc)
+
+        ax.scatter(x_coords[points_indices], y_coords[points_indices], 
+           c='black', s=16, alpha=0.6, zorder=5)
+        
 
         if theta_angles is not None:
             quiver_indices = list(range(0, len(data) - 1, quiver_iteration)) + [len(data) - 1]
@@ -77,6 +86,7 @@ class BasePathfinding():
                     np.cos(theta_angles[quiver_indices]) , np.sin(theta_angles[quiver_indices]) ,
                     color='purple', scale=12, width=0.005, headwidth=8, label='Orientation')
         self.robot.draw(ax, data[0, :])  # Draw robot at start
+        self.robot.draw_velocity_cones(ax, data[0, :])  # Draw velocity cones at start
         self.robot.draw(ax, data[-1, :])  # Draw robot at goal
 
         if show:
@@ -88,111 +98,76 @@ class BasePathfinding():
 
 
 
-# class Obstacle():
-#     def __init__(self, x, y):
-#         self.x = x
-#         self.y = y
-
-#     def contains(self, x, y, r):
-#         return False
-    
-#     # def contains(self, x, y, w,h):
-#     #     return False
-
-#     def draw(self, ax):
-#         pass
-
-
-# class RectangleObstacle(Obstacle):
-#     def __init__(self, x, y,w,h):
-#         super().__init__(x, y)
-#         self.w = w
-#         self.h = h
-
-#     def contains(self, x, y, r):
-#         return self.x - r <= x  <= self.x + self.w  + r and self.y -r <= y <= self.y + self.h + r
-    
-#     # def contains(self, x, y, w,h,theta):
-#     #     # Check if rotated rectangle robot collides with obstacle rectangle
-#     #     corners = [
-#     #         (x - w * math.cos(theta) - h * math.sin(theta), y - w * math.sin(theta) + h * math.cos(theta)),
-#     #         (x + w * math.cos(theta) - h * math.sin(theta), y + w * math.sin(theta) + h * math.cos(theta)),
-#     #         (x + w * math.cos(theta) + h * math.sin(theta), y + w * math.sin(theta) - h * math.cos(theta)),
-#     #         (x - w * math.cos(theta) + h * math.sin(theta), y - w * math.sin(theta) - h * math.cos(theta))
-#     #     ]
-#     #     return any(self.x - 0.1 <= cx <= self.x + self.w + 0.1 and self.y - 0.1 <= cy <= self.y + self.h + 0.1 for cx, cy in corners)
-    
-
-#     def draw(self, ax):
-#         rect = plt.Rectangle((self.x, self.y), self.w, self.h, color='gray')
-#         ax.add_patch(rect)
-
-# class CircleObstacle(Obstacle):
-#     def __init__(self, x, y, radius):
-#         super().__init__(x, y)
-#         self.radius = radius
-
-#     def contains(self, x, y, r):
-#         return (x - self.x) ** 2 + (y - self.y) ** 2 <= (self.radius + r) ** 2
-    
-#     def draw(self, ax):
-#         circle = plt.Circle((self.x, self.y), self.radius, color='gray')
-#         ax.add_patch(circle)
-
-
 class Robot():
-    def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
+    def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10, map=None):
         self.radius = radius
         self.wheelbase = wheelbase
         self.max_velocity = max_velocity
         self.max_steering_at_zero_v = max_steering_at_zero_v
         self.max_steering_at_max_v = max_steering_at_max_v
         self.acceleration = acceleration
+        self._dilated_map = None
+        self.set_map(map)
+
+    def set_map(self, map):
+        if map is None:
+            return
+        radius_px = int((self.radius / 10) * map.shape[0])
+        y, x = np.ogrid[-radius_px:radius_px+1, -radius_px:radius_px+1]
+        circle = x**2 + y**2 <= radius_px**2
+        dilated = binary_dilation(map == 0, structure=circle)
+        self._dilated_map = dilated
 
     def check_bounds(self,state,bounds):
         x = state[0][0]
         y = state[0][1]
         return x >= bounds[0] + self.radius and x <= bounds[1] - self.radius and y >= bounds[2] + self.radius and y <= bounds[3] - self.radius
     
-    def check_collision(self,state,map):
-        x = state[0][0]
-        y = state[0][1]
-
-        map_height, map_width = map.shape
+    def check_collision(self, state):
+        if self._dilated_map is None:
+            return False
         
-        # Convert world coordinates to pixel coordinates
-        # Assuming map covers bounds (0, 10, 0, 10)
-        world_width = 10
-        world_height = 10
+        x, y = state[0][0], state[0][1]
+        px = int((x / 10) * self._dilated_map.shape[1])
+        py = int((y / 10) * self._dilated_map.shape[0])
         
-        px = int((x / world_width) * map_width)
-        py = int(( (y / world_height)) * map_height)  # Flip y-axis
-
-        radius_px = int((self.radius / world_width) * map_width)
-        
-        # Check if robot center is out of bounds
-        if px < 0 or px >= map_width or py < 0 or py >= map_height:
-            return True
-        
-        # Check circular area around robot center
-        for dy in range(-radius_px, radius_px + 1):
-            for dx in range(-radius_px, radius_px + 1):
-                # Only check points within the circle
-                if dx*dx + dy*dy <= radius_px*radius_px:
-                    check_x = px + dx
-                    check_y = py + dy
-                    
-                    # Check bounds
-                    if 0 <= check_x < map_width and 0 <= check_y < map_height:
-                        # Check if pixel is black (obstacle) - value 0 in binary image
-                        if map[check_y, check_x] == 0:
-                            return True
-        
-        return False
+        if 0 <= px < self._dilated_map.shape[1] and 0 <= py < self._dilated_map.shape[0]:
+            return self._dilated_map[py, px]
+        return True
     
     def draw(self, ax, state):
+        
         circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.5)
         ax.add_patch(circle)
+
+    def draw_velocity_cones(self, ax, state):
+        x, y, theta = state[0], state[1], state[2]
+        cone_length = 1.5  # Fixed visual length
+        
+        # Calculate cone angles
+        left_angle_max = theta + self.max_steering_at_zero_v
+        right_angle_max = theta - self.max_steering_at_zero_v
+        left_angle_min = theta + self.max_steering_at_max_v
+        right_angle_min = theta - self.max_steering_at_max_v
+        
+        # Generate cone outline points
+        n_points = 20
+        
+        # Outer cone (max steering at zero velocity) - lighter, wider
+        angles_outer = np.linspace(right_angle_max, left_angle_max, n_points)
+        outer_x = x + cone_length * np.cos(angles_outer)
+        outer_y = y + cone_length * np.sin(angles_outer)
+        cone_outer_x = np.concatenate([[x], outer_x, [x]])
+        cone_outer_y = np.concatenate([[y], outer_y, [y]])
+        ax.fill(cone_outer_x, cone_outer_y, color='red', alpha=0.2, edgecolor='red', linewidth=1.5)
+        
+        # Inner cone (max steering at max velocity) - darker, narrower
+        angles_inner = np.linspace(right_angle_min, left_angle_min, n_points)
+        inner_x = x + cone_length * 0.9 * np.cos(angles_inner)
+        inner_y = y + cone_length * 0.9 * np.sin(angles_inner)
+        cone_inner_x = np.concatenate([[x], inner_x, [x]])
+        cone_inner_y = np.concatenate([[y], inner_y, [y]])
+        ax.fill(cone_inner_x, cone_inner_y, color='red', alpha=0.4, edgecolor='red', linewidth=1.5)
 
     def print_info(self):
         # Get all attributes that don't start with '_' (private) and aren't methods

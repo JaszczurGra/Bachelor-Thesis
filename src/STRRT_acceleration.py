@@ -40,9 +40,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 
 
-    def is_state_valid(self,si, state):
-        return self.robot.check_bounds(state,self.bounds) and not self.robot.check_collision(state,self.map)
-    
+
 
     def propagate(self,state, control, result):
      

@@ -138,7 +138,8 @@ def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
             map_folder = os.path.join(save_dir, f"map_{map_idx}")
             os.makedirs(map_folder, exist_ok=True)
             maps_png[map_idx].save(os.path.join(map_folder, 'map.png'))
-    print (map_indexes)
+
+
     print(f'Each map will be used approximately {base_runs_per_map} times.')
     return map_indexes,save_dir if args.save else None
 

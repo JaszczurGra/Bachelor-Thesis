@@ -18,7 +18,7 @@ class Visualizer:
     def __init__(self, n_plots):
 
         plt.ion()
-        self.n_plots = args.num_plots
+        self.n_plots = n_plots
         n_cols = math.ceil(math.sqrt(self.n_plots))
         n_rows = math.ceil(self.n_plots / n_cols)
         
@@ -51,7 +51,7 @@ class Visualizer:
 
         self.set_labels = False
 
-    def update(self, result_list,show_params):
+    def update(self, result_list,show_params=True):
         draw = False
         for i in range(self.n_plots):
                 result = result_list[i]
@@ -81,7 +81,7 @@ class Visualizer:
 
 
                     if show_params:
-                        legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in planner.robot.print_info().items())
+                        legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['planner'].robot.print_info().items())
                         ax.text(0,0, legend_text, transform=ax.transAxes, 
                             verticalalignment='bottom',fontsize=4,horizontalalignment='left',
                             bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
