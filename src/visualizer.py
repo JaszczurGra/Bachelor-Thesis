@@ -1,11 +1,24 @@
+from datetime import datetime
 import matplotlib.pyplot as plt
 import math
+import argparse
+import os
+import numpy as np
+from PIL import Image
+import json
+from base_pathfind_classes import BasePathfinding, Robot
 
+#TODO change title of the vis
+
+      # Use faster backend
+import matplotlib
+matplotlib.use('TkAgg') 
+#  LineCollection for drawingpaths 
 class Visualizer:
     def __init__(self, n_plots):
 
         plt.ion()
-        self.n_plots = n_plots
+        self.n_plots = args.num_plots
         n_cols = math.ceil(math.sqrt(self.n_plots))
         n_rows = math.ceil(self.n_plots / n_cols)
         
@@ -29,46 +42,153 @@ class Visualizer:
             ax.grid(True, alpha=0.3)
             if idx >= n_plots:
                 ax.set_visible(False)
+            ax.set_autoscale_on(False)
 
-        plt.tight_layout()
+        # plt.tight_layout()
         plt.pause(0.5)
 
         self.last_timestamps = [0.0] * self.n_plots
 
-    def update(self, result_list):
+        self.set_labels = False
+
+    def update(self, result_list,show_params):
+        draw = False
         for i in range(self.n_plots):
                 result = result_list[i]
-
-                if result is not None and result['timestamp'] > self.last_timestamps[i]:
+                ax = self.axs_flat[i]
+                if result is None:
+                    ax.set_visible(False)
+                    continue
+                if result['timestamp'] > self.last_timestamps[i]:
                     self.last_timestamps[i] = result['timestamp']
+                    ax.set_visible(True)
+ 
 
-                    ax = self.axs_flat[i]
-
-                    ax.clear()
+                    ax.cla()
                     ax.set_xlim(0, 10)
                     ax.set_ylim(0, 10)
                     ax.grid(True, alpha=0.3)
                     
                     result['planner'].visualize(ax)
-                    ax.set_title(f'Planner {i} - Run {result["run"]} - Solved:  {"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
-                    
+                    # ax.set_title(f'Planner {i} - Run {result["run"]} - Solved:  {"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
+                    ax.set_title(f'P:{i}R:{result["run"]}-{"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
 
-                    handles, labels = ax.get_legend_handles_labels()
-                    unique_labels = dict(zip(labels, handles))
-                    self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
-
-                    
-                    legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['randomized_params'].items())
-                    ax.text(0.02, -0.1, legend_text, transform=ax.transAxes, 
-                        verticalalignment='top', fontsize=9,
-                        bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.8))
+                    if not self.set_labels:
+                        handles, labels = ax.get_legend_handles_labels()
+                        unique_labels = dict(zip(labels, handles))
+                        self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
+                        self.set_labels = True
 
 
-                    self.fig.canvas.draw()
-                    self.fig.canvas.flush_events()
+                    if show_params:
+                        legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in planner.robot.print_info().items())
+                        ax.text(0,0, legend_text, transform=ax.transAxes, 
+                            verticalalignment='bottom',fontsize=4,horizontalalignment='left',
+                            bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
+                    draw = True
 
-                    plt.pause(0.01)
+        if draw:
+            self.fig.canvas.draw_idle()
+            self.fig.canvas.flush_events()
+
 
 
     def close(self):
         pass
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="Visualization of OMPL Car Planning Results")
+    parser.add_argument('-n', '--num_plots', type=int, default=16, help='Number of plots')
+    parser.add_argument('-d', '--data', type=str, default=None, help='Path to load data from file')
+    parser.add_argument('--no_params', action='store_true', help='Do not show robot parameters on plots')
+    args = parser.parse_args()
+
+    if args.data is None:
+        print("Please provide a data file path using the -d or --data argument.")
+        exit(1)
+    if not os.path.isdir(args.data):
+        print(f"The provided data path '{args.data}' is not a valid directory.")
+        exit(1)
+
+
+    map_folders = [d for d in os.listdir(args.data) if d.startswith('map_')]
+
+    all_results = []
+    for map_folder in map_folders:
+        map_path = os.path.join(args.data, map_folder)
+        
+        # Load map image
+        map_files = [f for f in os.listdir(map_path) if f == 'map.png']
+
+        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0]))) if map_files else np.zeros((50,50)) 
+
+        
+        # Load all path JSON files
+        path_files = [f for f in os.listdir(map_path) if f.startswith('path_') and f.endswith('.json')]
+        
+        for path_file in path_files:
+            with open(os.path.join(map_path, path_file), 'r') as f:
+                data = json.load(f)
+            
+
+#  
+            robot_data = data['robot']
+            goal = data.get('goal', {'point': (9.0, 9.0), 'threshold': 0.0})
+            goal_point = goal['point']
+            goal_threshold = goal['threshold']
+            
+            planner = BasePathfinding(robot=Robot(**robot_data), map=map_array,goal=goal_point,bounds=(0,10,0,10),goal_treshold=goal_threshold)
+            planner.solved_path = data['path']
+            all_results.append({
+                'planner': planner,
+                'solved': True,
+                'timestamp': 0.0,
+                'run': path_file,
+            })
+    
+    print(f"Loaded {len(all_results)} paths from {len(map_folders)} maps")
+    
+
+
+    visualizer = Visualizer(n_plots=args.num_plots)
+    current_page = 0 
+    total_pages = math.ceil(len(all_results) / args.num_plots)
+
+    def update_display():
+        visualizer.fig.suptitle(f'OMPL Car Planning - Page {current_page + 1}/{total_pages} (Use ← → arrows)', fontsize=16)
+
+        start_idx = current_page * args.num_plots
+        end_idx = min(start_idx + args.num_plots, len(all_results))
+        
+        result_list = [None] * args.num_plots
+        
+        for plot_idx in range(args.num_plots):
+            result_idx = start_idx + plot_idx
+            if result_idx < end_idx:
+                all_results[result_idx]['timestamp'] = datetime.now().timestamp()
+                all_results[result_idx]['run'] = result_idx + 1
+                result_list[plot_idx] = all_results[result_idx]
+        
+        visualizer.update(result_list, args.no_params)
+        # print(f"Showing page {current_page + 1}/{total_pages} (results {start_idx + 1}-{end_idx} of {len(all_results)})")
+    
+
+    def on_key(event):
+        """Handle keyboard input."""
+        global current_page
+        if event.key == 'right':
+            if current_page < total_pages - 1:
+                current_page += 1
+                update_display()
+        elif event.key == 'left':
+            if current_page > 0:
+                current_page -= 1
+                update_display()
+
+    visualizer.fig.canvas.mpl_connect('key_press_event', on_key)
+    update_display()
+
+    plt.ioff()
+    plt.show()

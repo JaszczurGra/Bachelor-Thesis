@@ -37,7 +37,10 @@ class BasePathfinding():
                 return
             path_data_str = self.solved_path
 
-        data = np.loadtxt(io.StringIO(path_data_str))   
+        if isinstance(path_data_str, list):
+            data = np.array(path_data_str)
+        else:
+            data = np.loadtxt(io.StringIO(path_data_str))   
 
 
         x_coords = data[:, 0]
@@ -192,13 +195,11 @@ class Robot():
         ax.add_patch(circle)
 
     def print_info(self):
+        # Get all attributes that don't start with '_' (private) and aren't methods
         return {
-            'radius': self.radius,
-            'wheelbase': self.wheelbase,
-            'max_velocity': self.max_velocity,
-            'max_steering_at_zero_v': self.max_steering_at_zero_v,
-            'max_steering_at_max_v': self.max_steering_at_max_v,
-            'acceleration': self.acceleration
+            key: value 
+            for key, value in self.__dict__.items() 
+            if not key.startswith('_') and not callable(value)
         }
 
 

@@ -1,3 +1,4 @@
+import io
 import os
 from RRT_acceleration import CarOMPL_acceleration
 from STRRT_acceleration import SSTCarOMPL_acceleration
@@ -10,7 +11,7 @@ from base_pathfind_classes import Robot
 import argparse
 import random
 from datetime import datetime
-
+import json
 
 from visualizer import Visualizer
 
@@ -18,7 +19,11 @@ from PIL import Image
 import numpy as np
 
 
-#TODO reverse the map color 0 free 1 occupied now is inverse 
+#TODO reverse the map color 0 free 1 occupied now is inverse ?
+#TODO should the structure be map and paths or link to map 
+#TODO robot set class into the files and ad to visualizer
+
+#TODO instead of time as name of saving name like for maps 
 
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
@@ -31,7 +36,7 @@ parser.add_argument('--map', type=str, default=None, help='Path to load map from
 args = parser.parse_args()
 
 
-def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, map_data=None):
+def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, maps=None, map_indexes=None):
     """Run planner continuously and store results at specific slot."""
     run_count = 0
     
@@ -48,8 +53,10 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot.wheelbase = 0.3
         robot.acceleration = 5
 
-
-
+        if maps is not None and map_indexes is not None:
+            map_data = maps[map_indexes[planner_id][run_count]]
+        else:
+            map_data = np.ones((50,50))
         # obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
         # obstacles += [CircleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.3,1.0)) for i in range(random.randint(3,10))]
       
@@ -62,10 +69,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         # car_planner = RRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
        
         solved = car_planner.solve()
-        run_count += 1
-        
 
-        print(f"[Planner {planner_id}] Run #{run_count} finished in {time.time() - start_time:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")
+        if args.verbose:
+            print(f"[Planner {planner_id}] Run #{run_count+1} finished in {time.time() - start_time:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")
         # print(f"[Planner {planner_id}] Run #{run_count} finished in {elapsed:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")
         
         if solved is not None: 
@@ -76,30 +82,65 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
                 'solved': solved,
 
                 'run': run_count, 
-                'randomized_params': {
-                    'robot_radius': robot.radius,
-                    'wheelbase': robot.wheelbase,
-                    'max_velocity': robot.max_velocity,
-                    # 'pruning_radius': car_planner.pruning_radius,
-                    # 'selection_radius': car_planner.selection_radius,
-                }
+
             }
-        if solved and save_dir is not None:
-            save_to_file(car_planner, save_dir,planner_id,run_count)
+        if solved and save_dir is not None and map_indexes is not None:
+            save_to_file(car_planner, save_dir,planner_id,run_count,map_indexes[planner_id][run_count])
+
+        run_count += 1        
+        
         
     if args.verbose:
         print(f"[Planner {planner_id}] Completed all {runs_per_planner} runs")
 
 
 
-def save_to_file(planner, save_dir,thread,run):
-    filepath = os.path.join(save_dir,  f'planner_{thread}_run_{run}_path.txt')
+def save_to_file(planner, save_dir,thread,run, map_index):
+    #TODO checking if dir exists? 
+ 
+ 
+
+    path_data = np.loadtxt(io.StringIO(planner.solved_path)).tolist()
+    
+    data = {
+        'robot': planner.robot.print_info(),
+        'path': path_data,
+        'goal': {'point': planner.goal_point, 'threshold': planner.goal_threshold},
+    }
+
+    save_dir = os.path.join(save_dir,f"map_{map_index}")
+    filepath = os.path.join(save_dir,  f'path_{thread}_{run}.json')
     with open(filepath, 'w') as f:
-        f.write(planner.solved_path)
+        json.dump(data, f, indent=2)
 
 
 
 
+def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
+    n_maps = len(maps_png)
+    n_runs = num_threads * runs_per_planner
+    base_runs_per_map = n_runs // n_maps
+    map_indexes = [[] for _ in range(num_threads)]    
+    current_map =  0 
+    for i in range(n_runs):
+        map_indexes[i %num_threads] += [current_map]
+        if (i+1) % base_runs_per_map == 0: 
+            current_map += 1 
+        if current_map >= n_maps:
+            current_map = 0
+
+    if args.save:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(base_dir, 'data')
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H:%M')
+        save_dir = os.path.join(data_dir, timestamp)
+        for map_idx in range(n_maps):
+            map_folder = os.path.join(save_dir, f"map_{map_idx}")
+            os.makedirs(map_folder, exist_ok=True)
+            maps_png[map_idx].save(os.path.join(map_folder, 'map.png'))
+    print (map_indexes)
+    print(f'Each map will be used approximately {base_runs_per_map} times.')
+    return map_indexes,save_dir if args.save else None
 
 
 def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
@@ -109,19 +150,6 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
         vis = Visualizer(num_threads)  
     
 
-    save_dir = None
-    if args.save:
-        # Go back one directory and create data folder
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        data_dir = os.path.join(base_dir, 'data')
-        os.makedirs(data_dir, exist_ok=True)
-        
-        # Create timestamped folder (YYYY-MM-DD_HH-MM)
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H:%M')
-        save_dir = os.path.join(data_dir, timestamp)
-        os.makedirs(save_dir, exist_ok=True)
-        print(f"Saving results to: {save_dir}")
-        
 
     manager = Manager()
     result_list = manager.list([None] * num_threads)  # Fixed-size list
@@ -132,7 +160,7 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     if args.map is not None:
         print(f"Loading map from: {args.map}")
 
-        maps_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'maps')
+        maps_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         folder_path = os.path.join(maps_dir, args.map)
         if not os.path.isdir(folder_path):
             print("Provided map path is not a valid folder.")
@@ -142,29 +170,29 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
 
         for png in png_files:
             img_path = os.path.join(folder_path, png)
-            img = Image.open(img_path).convert('1')  # Convert to grayscale
-            map_array = np.array(img)
-            # occupancy_grid = np.where(map_array < 128, 1, 0)  # Thresholding
-            maps.append(map_array)
-
-
+            img = Image.open(img_path) # Convert to grayscale
+            maps.append(img)
 
     else:
         print("No map loading path provided, using random maps not implemented yet")
         return
 
 
- 
+
+
 
 
     print(f"Running {num_threads} planners ({runs_per_planner} runs each)...\n")
-    
+
+    map_indexes,save_dir = generate_map_indexes_and_folders(num_threads, runs_per_planner, maps)
+    maps = np.array([np.array(m.convert('1') ) for m in maps])
+
     start_time = time.time()
 
     with Pool(processes=num_threads) as pool:
         async_results = [
             pool.apply_async(run_planner_continuous, 
-                           (i, max_runtime, result_list, stop_event, runs_per_planner,save_dir,maps[0]))
+                           (i, max_runtime, result_list, stop_event, runs_per_planner,save_dir,maps, map_indexes))
             for i in range(num_threads)
         ]
         
@@ -173,7 +201,7 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
             if args.vis:
                 vis.update(result_list)
             print(f"Elapsed Time: {time.time() - start_time:.2f}/{max_runtime*runs_per_planner}s", end='\r')
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     print('\n\nAll planners completed all runs.')
 
