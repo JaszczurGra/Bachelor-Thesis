@@ -19,6 +19,7 @@ class BasePathfinding():
         self.max_runtime = max_runtime
         self.goal_threshold = goal_treshold
 
+
     def solve(self):
         raise NotImplementedError("This method should be overridden by subclasses")
     

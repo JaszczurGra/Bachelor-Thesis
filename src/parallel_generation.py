@@ -17,7 +17,7 @@ from visualizer import Visualizer
 
 from PIL import Image
 import numpy as np
-
+import math
 
 #TODO reverse the map color 0 free 1 occupied now is inverse ?
 #TODO should the structure be map and paths or link to map 
@@ -45,25 +45,26 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
             print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
         start_time = time.time()
         
-        robot = Robot()
-
-        robot.radius = random.uniform(0.2,0.4)
-        robot.wheelbase = random.uniform(0.3,1.2) 
-        robot.max_velocity = 14
-        robot.wheelbase = 0.3
-        robot.acceleration = 5
+    
 
         if maps is not None and map_indexes is not None:
             map_data = maps[map_indexes[planner_id][run_count]]
         else:
             map_data = np.ones((50,50))
         # obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
-        # obstacles += [CircleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.3,1.0)) for i in range(random.randint(3,10))]
-      
+ 
+        robot = Robot()
+
+        robot.radius = random.uniform(0.2,0.6)
+        robot.wheelbase = random.uniform(0.2,0.6) 
+        robot.max_velocity = 10.0 + random.uniform(-3.0,3.0)
+        robot.acceleration = 5
+        robot.max_steering_at_zero_v = random.uniform(math.pi / 10.0, math.pi / 6.0)
+        robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
       
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
-        # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime)
-        car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=max_runtime)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime)
+        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=max_runtime)
         # car_planner = STRRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
        
         # car_planner = RRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
@@ -97,9 +98,6 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
 def save_to_file(planner, save_dir,thread,run, map_index):
     #TODO checking if dir exists? 
- 
- 
-
     path_data = np.loadtxt(io.StringIO(planner.solved_path)).tolist()
     
     data = {

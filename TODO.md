@@ -22,3 +22,11 @@ IMplement simple model of diffiusion with wanda db integration
 Train a small one using main.py generated maps 
 
 
+
+
+
+
+
+
+CHANGE THE BOUNDS TO NOT BE DEPENDANT FE TO 0-1
+VIS CONE VELOCITY IS DEFINDED BY IT ? 

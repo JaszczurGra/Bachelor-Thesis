@@ -1,9 +1,14 @@
 import os
 import random
 from PIL import Image, ImageDraw    
+import argparse
 
-
+parser = argparse.ArgumentParser(description="Map Generator for Robot Pathfinding")
+parser.add_argument('-n', '--num_maps', type=int, default=10, help=')Number of maps to generate')
+args = parser.parse_args()
 #Map of viable spaces 
+
+
 
 class MapGenerator:
     def __init__(self, num_rect_obstacles=(5, 9), num_circle_obstacles=(0, 0), 
@@ -93,6 +98,7 @@ class MapGenerator:
             img.save(filepath)
             
 
+        print(f"Generated {num_maps} maps in folder: {base_name}_{next_num:03d}")
 #
         # return maps_data
         
@@ -101,4 +107,4 @@ class MapGenerator:
 
 if __name__ == "__main__":
     generator = MapGenerator(num_rect_obstacles=(5, 10), num_circle_obstacles=(1, 3))
-    generator.generate_maps(num_maps=10)
+    generator.generate_maps(num_maps=args.num_maps)
