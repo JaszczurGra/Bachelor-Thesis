@@ -8,7 +8,7 @@ parser.add_argument('-n', '--num_maps', type=int, default=10, help=')Number of m
 args = parser.parse_args()
 #Map of viable spaces 
 
-
+#TODO make map smaller customizable 
 
 class MapGenerator:
     def __init__(self, num_rect_obstacles=(5, 9), num_circle_obstacles=(0, 0), 

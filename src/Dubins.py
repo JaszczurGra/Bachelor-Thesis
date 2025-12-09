@@ -40,10 +40,10 @@ class Dubins_pathfinding(BasePathfinding):
         si = ss.getSpaceInformation()
 
         start = ob.State(si)
-        start()[0][0], start()[0][1] = self.start_point
+        start()[0][0], start()[0][1] = self.start
 
         goal = ob.State(si)
-        goal()[0][0], goal()[0][1] = self.goal_point
+        goal()[0][0], goal()[0][1] = self.goal
  
 
         si.setup()

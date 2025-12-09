@@ -115,10 +115,10 @@ class CarOMPL_acceleration(BasePathfinding):
         pdef = ob.ProblemDefinition(si)
 
         start = ob.State(si)
-        start()[0][0], start()[0][1] = self.start_point
+        start()[0][0], start()[0][1] = self.start
         start()[1].value,start()[2][0] =  (math.pi / 2.0,0.0)
         goal = ob.State(si)
-        goal()[0][0], goal()[0][1] = self.goal_point
+        goal()[0][0], goal()[0][1] = self.goal
         goal()[1].value, goal()[2][0] = (0.0, 0.0)
 
 

@@ -75,10 +75,10 @@ class RRT_Planer(BasePathfinding):
 
         start = ob.State(si)
 
-        start()[0][0], start()[0][1] = self.start_point
+        start()[0][0], start()[0][1] = self.start
         start()[1].value=  math.pi / 2.0
         goal = ob.State(si)
-        goal()[0][0], goal()[0][1] = self.goal_point
+        goal()[0][0], goal()[0][1] = self.goal
         goal()[1].value = 0.0
 
         

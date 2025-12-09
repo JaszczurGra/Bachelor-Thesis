@@ -6,13 +6,15 @@ import os
 import numpy as np
 from PIL import Image
 import json
-from base_pathfind_classes import BasePathfinding, Robot
+from base_pathfind_classes import BasePathfinding, get_robot
 
 #TODO change title of the vis
 
       # Use faster backend
 import matplotlib
 matplotlib.use('TkAgg') 
+
+#TODO check if tkinter exists if not run with base backend and warn user and chane draw idle etc 
 #  LineCollection for drawingpaths 
 class Visualizer:
     def __init__(self, n_plots):
@@ -81,9 +83,9 @@ class Visualizer:
 
 
                     if show_params:
-                        legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['planner'].robot.print_info().items())
-                        ax.text(0,0, legend_text, transform=ax.transAxes, 
-                            verticalalignment='bottom',fontsize=4,horizontalalignment='left',
+                        legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['planner'].robot.print_info().items() if isinstance(value, (int, float))) 
+                        ax.text(1,0, legend_text, transform=ax.transAxes, 
+                            verticalalignment='bottom',fontsize=4,horizontalalignment='right',
                             bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
                     draw = True
 
@@ -95,14 +97,14 @@ class Visualizer:
 
     def close(self):
         pass
-
+ 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Visualization of OMPL Car Planning Results")
     parser.add_argument('-n', '--num_plots', type=int, default=16, help='Number of plots')
     parser.add_argument('-d', '--data', type=str, default=None, help='Path to load data from file')
-    parser.add_argument('--no_params', action='store_true', help='Do not show robot parameters on plots')
+    parser.add_argument('--params', action='store_true', help='Do not show robot parameters on plots')
     args = parser.parse_args()
 
     if args.data is None:
@@ -122,7 +124,7 @@ if __name__ == "__main__":
         # Load map image
         map_files = [f for f in os.listdir(map_path) if f == 'map.png']
 
-        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0]))) if map_files else np.zeros((50,50)) 
+        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])))[::-1] if map_files else np.zeros((50,50)) 
 
         
         # Load all path JSON files
@@ -133,13 +135,14 @@ if __name__ == "__main__":
                 data = json.load(f)
             
 
-#  
-            robot_data = data['robot']
-            goal = data.get('goal', {'point': (9.0, 9.0), 'threshold': 0.0})
-            goal_point = goal['point']
-            goal_threshold = goal['threshold']
-            
-            planner = BasePathfinding(robot=Robot(**robot_data), map=map_array,goal=goal_point,bounds=(0,10,0,10),goal_treshold=goal_threshold)
+            planner_data = data['planner']
+            planner_data['robot'] = get_robot(data['robot'])
+
+            #TODO add diffrent planners data implementatin finding class 
+
+            filtered_params = {k: v for k, v in planner_data.items() if k in BasePathfinding.__init__.__code__.co_varnames}
+
+            planner = BasePathfinding(map=map_array, **filtered_params)
             planner.solved_path = data['path']
             all_results.append({
                 'planner': planner,
@@ -171,7 +174,7 @@ if __name__ == "__main__":
                 all_results[result_idx]['run'] = result_idx + 1
                 result_list[plot_idx] = all_results[result_idx]
         
-        visualizer.update(result_list, args.no_params)
+        visualizer.update(result_list, args.params)
         # print(f"Showing page {current_page + 1}/{total_pages} (results {start_idx + 1}-{end_idx} of {len(all_results)})")
     
 

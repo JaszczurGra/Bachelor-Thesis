@@ -3,7 +3,7 @@ import ompl.control as oc
 import ompl.util as ou
 import math
 from functools import partial
-from base_pathfind_classes import KinematicGoalRegionWithVelocity, Robot, KinematicGoalRegion,BasePathfinding
+from base_pathfind_classes import KinematicGoalRegionWithVelocity, RectangleRobot, Robot, KinematicGoalRegion,BasePathfinding
 import numpy as np
 
 import ompl.util as ou
@@ -123,10 +123,10 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 
         start = ob.State(si)
-        start()[0][0], start()[0][1] = self.start_point
+        start()[0][0], start()[0][1] = self.start
         start()[1].value,start()[2][0] =  (math.pi / 2.0,0.0)
         goal = ob.State(si)
-        goal()[0][0], goal()[0][1] = self.goal_point
+        goal()[0][0], goal()[0][1] = self.goal
         goal()[1].value, goal()[2][0] = (0.0, 0.0)
 
         goal_region = KinematicGoalRegion(si, goal, pos_threshold=self.pos_treshold)
@@ -158,7 +158,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    car_planner = SSTCarOMPL_acceleration(max_runtime=3, map=np.ones((100,100)))
+    car_planner = SSTCarOMPL_acceleration(max_runtime=3, map=np.ones((100,100)),robot =RectangleRobot(0.5,1.0))
     print(car_planner.solve())
     car_planner.visualize()
 

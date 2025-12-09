@@ -6,6 +6,8 @@ from matplotlib.collections import LineCollection
 from scipy.ndimage import binary_dilation
 import numpy as np
 
+
+
 class BasePathfinding():
     def __init__(self,robot=None,map=None,start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_treshold=0.0):
         """bounds = (xmin,xmax,ymin,ymax)"""
@@ -13,12 +15,22 @@ class BasePathfinding():
         self.map = map 
         self.robot = robot if robot is not None else Robot()
         self.robot.set_map(map)
-        self.start_point = start
-        self.goal_point = goal
+        self.start = start
+        self.goal = goal
         self.bounds = bounds
         self.max_runtime = max_runtime
         self.goal_threshold = goal_treshold
 
+    def print_info(self):
+        data = {'class':self.__class__.__name__} | {
+            key: value 
+            for key, value in self.__dict__.items() 
+            if not key.startswith('_') and not callable(value)
+        } 
+        data.pop('map', None)
+        data['solved_path'] = np.loadtxt(io.StringIO(self.solved_path)).tolist()
+        data['robot'] = self.robot.print_info()
+        return data
 
     def solve(self):
         raise NotImplementedError("This method should be overridden by subclasses")
@@ -63,9 +75,9 @@ class BasePathfinding():
 
         # ax.plot(self.start_point[0], self.start_point[1], '*', color='red', markersize=15, label='Start Center')
 
-        ax.plot(self.goal_point[0], self.goal_point[1], 'x', color='blue', markersize=8, label='Goal Center')
+        ax.plot(self.goal[0], self.goal[1], 'x', color='blue', markersize=8, label='Goal Center')
         if self.goal_threshold > 0:
-            ax.add_patch(plt.Circle(self.goal_point, self.goal_threshold, color='blue', alpha=0.2, label='Goal Region'))
+            ax.add_patch(plt.Circle(self.goal, self.goal_threshold, color='blue', alpha=0.2, label='Goal Region'))
 
 
         points_indices = list(range(0, len(data) - 1, point_iteration)) + [len(data) - 1]
@@ -96,11 +108,22 @@ class BasePathfinding():
 
 
 
+def get_robot(robot_data):
+    if robot_data is None:
+        return Robot()
+    
+    robot_types = {
+        'Robot': Robot,
+        'RectangleRobot': RectangleRobot,
+    }
 
+    robot = robot_types.get(robot_data.get('class', 'Robot'), Robot)
+    filtered_params = {k: v for k, v in robot_data.items() if k in robot.__init__.__code__.co_varnames}
+    return robot(**filtered_params)
 
 
 class Robot():
-    def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10, map=None):
+    def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
         self.radius = radius
         self.wheelbase = wheelbase
         self.max_velocity = max_velocity
@@ -108,7 +131,7 @@ class Robot():
         self.max_steering_at_max_v = max_steering_at_max_v
         self.acceleration = acceleration
         self._dilated_map = None
-        self.set_map(map)
+
 
     def set_map(self, map):
         if map is None:
@@ -171,31 +194,28 @@ class Robot():
         ax.fill(cone_inner_x, cone_inner_y, color='red', alpha=0.4, edgecolor='red', linewidth=1.5)
 
     def print_info(self):
-        # Get all attributes that don't start with '_' (private) and aren't methods
-        return {
-            key: value 
-            for key, value in self.__dict__.items() 
-            if not key.startswith('_') and not callable(value)
-        }
+        return {'class':self.__class__.__name__} | {
+                    key: value 
+                    for key, value in self.__dict__.items() 
+                    if not key.startswith('_') and not callable(value)
+                } 
 
 
 class RectangleRobot(Robot):
-    def __init__(self, width=0.5, length=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
-        super().__init__(0,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration)
+    def __init__(self, width=0.5, lenght=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
+        super().__init__( 0 ,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration)
         self.width = width
-        self.length = length
+        self.lenght = lenght
 
+    def set_map(self, map):
+        self.radius = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
+        super().set_map(map)
 
     def draw(self, ax, state):
-        rect = plt.Rectangle((state[0] - self.width, state[1] - self.length), 2*self.width, 2*self.length, angle=math.degrees(state[2]), color='green', alpha=0.5)
+        rect = plt.Rectangle((state[0] - self.lenght / 2.0,   state[1] - self.width / 2.0), self.lenght, self.width, angle=math.degrees(state[2]), color='green', alpha=0.5,rotation_point='center')
         ax.add_patch(rect)
-
-    def check_collision(self,state,obstacles):
-        diag_radius = math.sqrt(self.width**2 + self.length**2)
-        x = state[0][0]
-        y = state[0][1]
-        return any(obs.contains(x, y, diag_radius) for obs in obstacles)
-
+        circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.3)
+        ax.add_patch(circle)
 
 class KinematicGoalRegion(ob.Goal):
     def __init__(self, si, goal_state, pos_threshold=0.5):
