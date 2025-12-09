@@ -73,9 +73,9 @@ class Visualizer:
                     ax.set_ylim(0, 10)
                     ax.grid(True, alpha=0.3)
                     
-                    result['planner'].visualize(ax)
+                    max_vel = result['planner'].visualize(ax)
                     # ax.set_title(f'Planner {i} - Run {result["run"]} - Solved:  {"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
-                    ax.set_title(f'P:{i}R:{result["run"]}-{"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
+                    ax.set_title(f'P:{i}R:{result["run"]}-{"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"} V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f}')
 
                     if not self.set_labels:
                         handles, labels = ax.get_legend_handles_labels()

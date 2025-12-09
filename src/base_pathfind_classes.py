@@ -112,6 +112,13 @@ class BasePathfinding():
             plt.show()
 
 
+        if  len(data[0]) > 3 :
+            vel  = data[:,3]
+            max_vel = np.max(vel)
+            return max_vel
+        return 0
+
+
 
 
 def get_robot(robot_data):
