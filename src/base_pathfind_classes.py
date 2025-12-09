@@ -89,7 +89,7 @@ class BasePathfinding():
         ax.scatter(x_coords[points_indices], y_coords[points_indices], color='black', s=20)
 
 
-        if len(data) > 3:
+        if len(data[0]) > 3:
             for p in points_indices:
                 state = data[p, :]
 
@@ -125,6 +125,8 @@ def get_robot(robot_data):
 
     robot = robot_types.get(robot_data.get('class', 'Robot'), Robot)
     filtered_params = {k: v for k, v in robot_data.items() if k in robot.__init__.__code__.co_varnames}
+    print ('robot_data', robot_data )
+    print( 'filtered', filtered_params)
     return robot(**filtered_params)
 
 
@@ -211,10 +213,10 @@ class Robot():
 
 
 class RectangleRobot(Robot):
-    def __init__(self, width=0.5, length=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
+    def __init__(self, width=0.5, lenght=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
         super().__init__( 0 ,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration)
         self.width = width
-        self.lenght = length
+        self.lenght = lenght
 
     def set_map(self, map):
         self.radius = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
@@ -237,25 +239,23 @@ class KinematicGoalRegion(ob.Goal):
         return  math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
     
 class KinematicGoalRegionWithVelocity(KinematicGoalRegion):
-    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=3.0,velocity_weight=0.01):
+    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=3.0,velocity_weight=0.01,bounds=(0,10,0,10),max_velocity=15.0):
         super().__init__(si, goal_state, pos_threshold)
-        self.vel_threshold = velocity_threshold
-        self.velocity_weight = velocity_weight  
+        self.vel_threshold = velocity_threshold 
+        self.velocity_weight = velocity_weight * (math.sqrt((bounds[1]-bounds[0])**2 + (bounds[3]-bounds[2])**2) / max_velocity)  # Normalize weight based on  max velocity and scale to postion bounds 
+
 
     def isSatisfied(self, state):
  
-        pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
+        #TODO normlaize to bounds DIFFRENT SHAPE 
+        pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)   # Normalize by max possible distance in bounds
 
-        if self.vel_threshold:
-            v_actual = state[2][0]
-            v_goal = self.goal_state_[2]
-            v_dist = abs(v_actual - v_goal)
-            return pos_dist <= self.pos_threshold   and v_dist <= self.vel_threshold # Must be stopped and close
-        
-        return pos_dist <= self.pos_threshold
+   
+        v_actual = state[2][0]
+        v_goal = self.goal_state_[2]
+        v_dist = abs(v_actual - v_goal)
+        return pos_dist <= self.pos_threshold   and v_dist <= self.vel_threshold # Must be stopped and close
+    
     def distanceGoal(self, state):
         pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
-        if self.vel_threshold:
-            return pos_dist  + abs(state[2][0] - self.goal_state_[2]) * self.velocity_weight
-        
-        return pos_dist
+        return pos_dist  + abs(state[2][0] - self.goal_state_[2]) * self.velocity_weight

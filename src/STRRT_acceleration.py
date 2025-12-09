@@ -19,7 +19,7 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 class SSTCarOMPL_acceleration(BasePathfinding):
-    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0),goal=(9.0,9.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0, vel_threshold=4, pos_treshold=0.5):
+    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0),goal=(9.0,9.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
         """
         set the velocity weight to 0 to ignore velocity in goal region
         """
@@ -131,7 +131,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
         goal_region = KinematicGoalRegion(si, goal, pos_threshold=self.pos_treshold)
         if self.velocity_weight > 0:
-            goal_region = KinematicGoalRegionWithVelocity(si, goal, pos_threshold=self.pos_treshold,velocity_threshold=self.vel_threshold,velocity_weight=self.velocity_weight)
+            goal_region = KinematicGoalRegionWithVelocity(si, goal, pos_threshold=self.pos_treshold,velocity_threshold=self.vel_threshold,velocity_weight=self.velocity_weight,bounds=self.bounds,max_velocity=self.robot.max_velocity) 
         pdef.setStartAndGoalStates (start,goal)
         pdef.setGoal(goal_region)
 

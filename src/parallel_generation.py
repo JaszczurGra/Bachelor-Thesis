@@ -54,9 +54,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
             map_data = np.ones((50,50))
         # obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
  
-        robot = RectangleRobot(0.3,1)
-        robot.width = random.uniform(0.2,0.6)
-        robot.lenght = random.uniform(0.3,0.7)
+        robot = RectangleRobot( )
+        robot.width = random.uniform(0.03,0.4)
+        robot.lenght = random.uniform(0.03,0.4)
         # robot.radius = random.uniform(0.2,0.6)
         robot.wheelbase = random.uniform(0.2,0.6) 
         robot.max_velocity = 10.0 + random.uniform(-3.0,3.0)
@@ -65,8 +65,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
       
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime)
-        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=max_runtime)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,5.0),goal=(9.0,5.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
+        # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
+        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,5.0),goal=(9.0,5.0),max_runtime=max_runtime)
         # car_planner = STRRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
        
         # car_planner = RRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
@@ -184,7 +185,9 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     print(f"Running {num_threads} planners ({runs_per_planner} runs each)...\n")
 
     map_indexes,save_dir = generate_map_indexes_and_folders(num_threads, runs_per_planner, maps)
-    maps = np.array([np.array(m.convert('1'))[::-1] for m in maps])
+
+
+    maps = [np.array(m.convert('1'))[::-1] for m in maps]
 
     start_time = time.time()
 

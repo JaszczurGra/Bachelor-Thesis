@@ -126,7 +126,8 @@ if __name__ == "__main__":
         # Load map image
         map_files = [f for f in os.listdir(map_path) if f == 'map.png']
 
-        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])))[::-1] if map_files else np.zeros((50,50)) 
+        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])).convert('1'))[::-1] if map_files else np.zeros((50,50)) 
+
 
         
         # Load all path JSON files
@@ -145,6 +146,7 @@ if __name__ == "__main__":
             filtered_params = {k: v for k, v in planner_data.items() if k in BasePathfinding.__init__.__code__.co_varnames}
             planner = BasePathfinding(map=map_array, **filtered_params)
             planner.solved_path = data['path']
+
 
             all_results.append({
                 'planner': planner,
