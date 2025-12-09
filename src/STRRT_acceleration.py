@@ -19,7 +19,7 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 class SSTCarOMPL_acceleration(BasePathfinding):
-    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0),goal=(9.0,9.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
+    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0, 0.0),goal=(9.0,9.0,0.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
         """
         set the velocity weight to 0 to ignore velocity in goal region
         """
@@ -54,7 +54,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         
         The differential equations (ODE) are integrated over the 'duration' (dt).
         """
-
+        #TODO cap the steering angle based * by dt as this is theta dot 
         MAX_DELTA = self.robot.max_steering_at_zero_v -  np.clip(state[3] / self.robot.max_velocity, 0.0, 1.0) * (self.robot.max_steering_at_zero_v - self.robot.max_steering_at_max_v)
         delta = np.clip(control[1], -MAX_DELTA, MAX_DELTA)
    
@@ -123,11 +123,11 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 
         start = ob.State(si)
-        start()[0][0], start()[0][1] = self.start
-        start()[1].value,start()[2][0] =  (math.pi / 2.0,0.0)
+        start()[0][0], start()[0][1] = self.start[:2]
+        start()[1].value,start()[2][0] = (self.start[2],0.0) #(math.pi / 2.0,0.0)
         goal = ob.State(si)
-        goal()[0][0], goal()[0][1] = self.goal
-        goal()[1].value, goal()[2][0] = (0.0, 0.0)
+        goal()[0][0], goal()[0][1] = self.goal[:2]
+        goal()[1].value, goal()[2][0] = (self.goal[2], 0.0)
 
         goal_region = KinematicGoalRegion(si, goal, pos_threshold=self.pos_treshold)
         if self.velocity_weight > 0:

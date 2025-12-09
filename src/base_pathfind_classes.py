@@ -7,9 +7,9 @@ from scipy.ndimage import binary_dilation
 import numpy as np
 
 
-
+#TODO goalsetting change for rotations add 
 class BasePathfinding():
-    def __init__(self,robot=None,map=None,start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_threshold=0.0):
+    def __init__(self,robot=None,map=None,start=(0,0,0),goal=(10,10,0),bounds=(0,10,0,10),max_runtime=30.0,goal_threshold=0.0):
         """bounds = (xmin,xmax,ymin,ymax)"""
         self.solved_path = None 
         self.map = map 
@@ -132,8 +132,6 @@ def get_robot(robot_data):
 
     robot = robot_types.get(robot_data.get('class', 'Robot'), Robot)
     filtered_params = {k: v for k, v in robot_data.items() if k in robot.__init__.__code__.co_varnames}
-    print ('robot_data', robot_data )
-    print( 'filtered', filtered_params)
     return robot(**filtered_params)
 
 

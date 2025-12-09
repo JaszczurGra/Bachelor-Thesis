@@ -55,17 +55,18 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         # obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
  
         robot = RectangleRobot( )
-        robot.width = random.uniform(0.03,0.4)
-        robot.lenght = random.uniform(0.03,0.4)
+        robot.width = random.uniform(0.01,0.5)
+        robot.lenght = random.uniform(0.01,0.5) 
+
         # robot.radius = random.uniform(0.2,0.6)
-        robot.wheelbase = random.uniform(0.2,0.6) 
-        robot.max_velocity = 10.0 + random.uniform(-3.0,3.0)
-        robot.acceleration = 5
+        robot.wheelbase = robot.lenght * 0.8 
+        robot.max_velocity = 4.0 + random.uniform(-1.0,1.0)
+        robot.acceleration = 4
         robot.max_steering_at_zero_v = random.uniform(math.pi / 10.0, math.pi / 6.0)
         robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
       
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,5.0),goal=(9.0,5.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,5.0,0),goal=(9.0,5.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
         # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,5.0),goal=(9.0,5.0),max_runtime=max_runtime)
         # car_planner = STRRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
