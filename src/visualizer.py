@@ -22,6 +22,8 @@ class Visualizer:
         plt.ion()
         self.n_plots = n_plots
         n_cols = math.ceil(math.sqrt(self.n_plots))
+
+        self.font_size  = max(4, 12 -  n_cols) 
         n_rows = math.ceil(self.n_plots / n_cols)
         
         self.fig, axs = plt.subplots(n_rows, n_cols)#, figsize=(5 * n_cols, 5 * n_rows))
@@ -85,7 +87,7 @@ class Visualizer:
                     if show_params:
                         legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['planner'].robot.print_info().items() if isinstance(value, (int, float))) 
                         ax.text(1,0, legend_text, transform=ax.transAxes, 
-                            verticalalignment='bottom',fontsize=4,horizontalalignment='right',
+                            verticalalignment='bottom',fontsize = self.font_size , horizontalalignment='right',
                             bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
                     draw = True
 
@@ -130,7 +132,7 @@ if __name__ == "__main__":
         # Load all path JSON files
         path_files = [f for f in os.listdir(map_path) if f.startswith('path_') and f.endswith('.json')]
         
-        for path_file in path_files:
+        for i, path_file in enumerate(path_files):
             with open(os.path.join(map_path, path_file), 'r') as f:
                 data = json.load(f)
             
@@ -141,15 +143,16 @@ if __name__ == "__main__":
             #TODO add diffrent planners data implementatin finding class 
 
             filtered_params = {k: v for k, v in planner_data.items() if k in BasePathfinding.__init__.__code__.co_varnames}
-
             planner = BasePathfinding(map=map_array, **filtered_params)
             planner.solved_path = data['path']
+
             all_results.append({
                 'planner': planner,
                 'solved': True,
                 'timestamp': 0.0,
                 'run': path_file,
             })
+            print(f"Loaded path {i + 1}/{len(path_files)} from {map_folder}")
     
     print(f"Loaded {len(all_results)} paths from {len(map_folders)} maps")
     

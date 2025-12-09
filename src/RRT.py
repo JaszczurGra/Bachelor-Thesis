@@ -20,7 +20,7 @@ ou.setLogLevel(ou.LOG_NONE)
 
 class RRT_Planer(BasePathfinding):
     def __init__(self,robot=Robot(),Obstacles=[],start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5, bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=1.0, pruning_radius=0.005):
-        super().__init__(robot, Obstacles, start, goal,bounds,max_runtime,goal_treshold=goal_treshold) 
+        super().__init__(robot, Obstacles, start, goal,bounds,max_runtime,goal_threshold=goal_treshold) 
         self.propagate_step_size = propagate_step_size
         self.control_duration = control_duration  # (min_steps, max_steps)
 

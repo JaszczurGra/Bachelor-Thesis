@@ -23,7 +23,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         """
         set the velocity weight to 0 to ignore velocity in goal region
         """
-        super().__init__(robot, map, start, goal,bounds,max_runtime,goal_treshold=pos_treshold) 
+        super().__init__(robot, map, start, goal,bounds,max_runtime,goal_threshold=pos_treshold) 
         self.propagate_step_size = propagate_step_size
         self.control_duration = control_duration  # (min_steps, max_steps)
         self.pruning_radius = pruning_radius

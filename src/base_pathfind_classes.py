@@ -9,7 +9,7 @@ import numpy as np
 
 
 class BasePathfinding():
-    def __init__(self,robot=None,map=None,start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_treshold=0.0):
+    def __init__(self,robot=None,map=None,start=(0,0),goal=(10,10),bounds=(0,10,0,10),max_runtime=30.0,goal_threshold=0.0):
         """bounds = (xmin,xmax,ymin,ymax)"""
         self.solved_path = None 
         self.map = map 
@@ -19,7 +19,7 @@ class BasePathfinding():
         self.goal = goal
         self.bounds = bounds
         self.max_runtime = max_runtime
-        self.goal_threshold = goal_treshold
+        self.goal_threshold = goal_threshold
 
     def print_info(self):
         data = {'class':self.__class__.__name__} | {
@@ -40,7 +40,7 @@ class BasePathfinding():
         return self.robot.check_bounds(state,self.bounds) and not self.robot.check_collision(state)
 
 
-    def visualize(self, ax=None, path_data_str=None,point_iteration=10,path_iteration=1,quiver_iteration=10):
+    def visualize(self, ax=None, path_data_str=None,point_iteration=9,path_iteration=1):
         show = False
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 8))
@@ -56,11 +56,8 @@ class BasePathfinding():
         else:
             data = np.loadtxt(io.StringIO(path_data_str))   
 
-
         x_coords = data[:, 0]
         y_coords = data[:, 1]
-
-        theta_angles = data[:, 2] if data.shape[1] > 2 else None
 
 
         ax.set_xlim(self.bounds[0], self.bounds[1])
@@ -89,18 +86,27 @@ class BasePathfinding():
         lc = LineCollection(path_segments, colors='black', linewidths=2, label='Planned Path')
         ax.add_collection(lc)
 
-        ax.scatter(x_coords[points_indices], y_coords[points_indices], 
-           c='black', s=16, alpha=0.6, zorder=5)
-        
+        ax.scatter(x_coords[points_indices], y_coords[points_indices], color='black', s=20)
 
-        if theta_angles is not None:
-            quiver_indices = list(range(0, len(data) - 1, quiver_iteration)) + [len(data) - 1]
-            ax.quiver(x_coords[quiver_indices], y_coords[quiver_indices], 
-                    np.cos(theta_angles[quiver_indices]) , np.sin(theta_angles[quiver_indices]) ,
-                    color='purple', scale=12, width=0.005, headwidth=8, label='Orientation')
+
+        if len(data) > 3:
+            for p in points_indices:
+                state = data[p, :]
+
+                if not state[3] == 0:
+                    ax.quiver(state[0], state[1], 
+                    np.cos(state[2]) , np.sin(state[2]) ,
+                    color='Red', scale=10  / (state[3] / 10), width=0.03, headwidth=8,headlength=8, label='Velocity')
+            
+
+        # for p in points_indices:
+        #     self.robot.draw(ax, data[p, :])  # Draw robot at sampled points along the path
         self.robot.draw(ax, data[0, :])  # Draw robot at start
-        self.robot.draw_velocity_cones(ax, data[0, :])  # Draw velocity cones at start
         self.robot.draw(ax, data[-1, :])  # Draw robot at goal
+    
+
+        self.robot.draw_velocity_cones(ax, data[0, :]) 
+      
 
         if show:
             plt.show()
@@ -160,11 +166,14 @@ class Robot():
         return True
     
     def draw(self, ax, state):
-        
         circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.5)
+        
         ax.add_patch(circle)
+        #TODO show wheelbase
 
     def draw_velocity_cones(self, ax, state):
+
+        #TODO change cone into curves representing  steering
         x, y, theta = state[0], state[1], state[2]
         cone_length = 1.5  # Fixed visual length
         
@@ -202,20 +211,19 @@ class Robot():
 
 
 class RectangleRobot(Robot):
-    def __init__(self, width=0.5, lenght=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
+    def __init__(self, width=0.5, length=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10):
         super().__init__( 0 ,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration)
         self.width = width
-        self.lenght = lenght
+        self.lenght = length
 
     def set_map(self, map):
         self.radius = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
         super().set_map(map)
 
     def draw(self, ax, state):
+        super().draw(ax, state)
         rect = plt.Rectangle((state[0] - self.lenght / 2.0,   state[1] - self.width / 2.0), self.lenght, self.width, angle=math.degrees(state[2]), color='green', alpha=0.5,rotation_point='center')
         ax.add_patch(rect)
-        circle = plt.Circle((state[0], state[1]), self.radius, color='green', alpha=0.3)
-        ax.add_patch(circle)
 
 class KinematicGoalRegion(ob.Goal):
     def __init__(self, si, goal_state, pos_threshold=0.5):

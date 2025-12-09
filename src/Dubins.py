@@ -28,6 +28,8 @@ class Dubins_pathfinding(BasePathfinding):
         super().__init__(robot, map, start, goal, bounds, max_runtime) 
         self.interpolate_steps = interpolate_steps
 
+        #TODO add robot max_steering as dubins wheelbase 
+
     def solve(self):
         space = ob.DubinsStateSpace(self.robot.wheelbase / math.tan(self.robot.max_steering_at_zero_v), False)
 
