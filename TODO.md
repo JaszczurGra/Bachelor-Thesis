@@ -30,3 +30,26 @@ Train a small one using main.py generated maps
 
 CHANGE THE BOUNDS TO NOT BE DEPENDANT FE TO 0-1
 VIS CONE VELOCITY IS DEFINDED BY IT ? 
+
+
+
+Is dilated map better than just calculating it per frame prop yes 
+
+
+
+
+
+
+
+
+
+Change the params so that the params from parall pass into the vis as well 
+normalize state space for dubins and strrt 
+
+
+
+
+#MAPS
+one that makes the robot need to rotate as it's rectangle 
+diffrent lenghts for diffrent sized robots 
+diffrent curvature for diffrent length 

@@ -6,7 +6,7 @@ import numpy as np
 import math
 from functools import partial
 from ompl import geometric as og # needed for asGeometric()
-from base_pathfind_classes import Robot,BasePathfinding
+from base_pathfind_classes import RectangleRobot, Robot,BasePathfinding
 
 import time 
 
@@ -24,10 +24,10 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 class Dubins_pathfinding(BasePathfinding):
-    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0),goal=(9.0,9.0),max_runtime=30.0,bounds=(0,10,0,10),interpolate_steps=50):
+    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0,0),goal=(9.0,9.0,0),max_runtime=30.0,bounds=(0,10,0,10),interpolate_steps=50):
         super().__init__(robot, map, start, goal, bounds, max_runtime) 
         self.interpolate_steps = interpolate_steps
-
+        self.robot.set_map(map)
         #TODO add robot max_steering as dubins wheelbase 
 
     def solve(self):
@@ -42,10 +42,10 @@ class Dubins_pathfinding(BasePathfinding):
         si = ss.getSpaceInformation()
 
         start = ob.State(si)
-        start()[0][0], start()[0][1] = self.start
+        start()[0][0], start()[0][1] = self.start[:2]
 
         goal = ob.State(si)
-        goal()[0][0], goal()[0][1] = self.goal
+        goal()[0][0], goal()[0][1] = self.goal[:2]
  
 
         si.setup()
@@ -86,7 +86,11 @@ class Dubins_pathfinding(BasePathfinding):
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    car_planner = Dubins_pathfinding(max_runtime=5)
+    map =np.ones((100,100)) * 255
+    map[0,0] = 0
+    map[30:,20:50] = 0 
+
+    car_planner = Dubins_pathfinding(max_runtime=30,robot=RectangleRobot(0.5,1.0),map=map,start=(1,5.0,0),goal=(9.0,9.0,0))
     print(car_planner.solve())
     car_planner.visualize()
     plt.show()

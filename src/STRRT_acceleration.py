@@ -54,14 +54,12 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         
         The differential equations (ODE) are integrated over the 'duration' (dt).
         """
-        #TODO cap the steering angle based * by dt as this is theta dot 
         MAX_DELTA = self.robot.max_steering_at_zero_v -  np.clip(state[3] / self.robot.max_velocity, 0.0, 1.0) * (self.robot.max_steering_at_zero_v - self.robot.max_steering_at_max_v)
         delta = np.clip(control[1], -MAX_DELTA, MAX_DELTA)
    
         result[0] =  state[3] * math.cos(state[2])  
         result[1] = state[3] * math.sin(state[2])  
         result[2] = (state[3] / self.robot.wheelbase) * math.tan(delta) 
-        # result[3] = np.clip(control[0], 0.0, self.robot.max_velocity) 
         result[3] = control[0]
 
     def solve(self):
