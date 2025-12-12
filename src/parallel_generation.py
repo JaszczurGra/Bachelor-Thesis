@@ -21,10 +21,9 @@ import math
 
 #TODO reverse the map color 0 free 1 occupied now is inverse ?
 #TODO should the structure be map and paths or link to map 
-#TODO robot set class into the files and ad to visualizer
 
 #TODO instead of time as name of saving name like for maps 
-
+#TODO robot setmap could be optimazed if the same map is used, no it couldnt as the w,h changes 
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
 parser.add_argument('-r', '--runs_per_planner', type=int, default=5, help='Number of runs per planner')

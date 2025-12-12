@@ -9,8 +9,11 @@ import numpy as np
 
 #TODO goalsetting change for rotations add 
 class BasePathfinding():
-    def __init__(self,robot=None,map=None,start=(0,0,0),goal=(10,10,0),bounds=(0,10,0,10),max_runtime=30.0,goal_threshold=0.0):
+    def __init__(self,robot=None,map=None,start=(0,0,0),goal=(10,10,0),bounds=(10,10),max_runtime=30.0,goal_threshold=0.0):
         """bounds = (xmin,xmax,ymin,ymax)"""
+
+        if len(bounds) > 2:
+            bounds = (10,10)
         self.solved_path = None 
         self.map = map 
         self.robot = robot if robot is not None else Robot()
@@ -40,7 +43,7 @@ class BasePathfinding():
         return self.robot.check_bounds(state) and not self.robot.check_collision(state)
 
 
-    def visualize(self, ax=None, path_data_str=None,point_iteration=9,path_iteration=1):
+    def visualize(self, ax=None, path_data_str=None,point_iteration=9,path_iteration=1,velocity_scale =0.2):
         show = False
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 8))
@@ -60,14 +63,14 @@ class BasePathfinding():
         y_coords = data[:, 1]
 
 
-        ax.set_xlim(self.bounds[0], self.bounds[1])
-        ax.set_ylim(self.bounds[2], self.bounds[3])
+        ax.set_xlim(0, self.bounds[0])
+        ax.set_ylim(0, self.bounds[1])
         ax.grid(True, linestyle='--', alpha=0.5)
 
 
         #gray_r for reveresed
         if self.map is not None:
-            ax.imshow(self.map, extent=self.bounds, origin='lower', cmap='gray', alpha=1)
+            ax.imshow(self.map, extent=(0,self.bounds[0],0,self.bounds[1]), origin='lower', cmap='gray', alpha=1)
 
 
         # ax.plot(self.start_point[0], self.start_point[1], '*', color='red', markersize=15, label='Start Center')
@@ -90,14 +93,20 @@ class BasePathfinding():
 
 
         if len(data[0]) > 3:
+            # velocity_scale = math.sqrt(self.bounds[0] ** 2 + self.bounds[1] ** 2) / velocity_scale
+            # print(velocity_scale)
             for p in points_indices:
                 state = data[p, :]
-
+                #TODO
                 if not state[3] == 0:
-                    ax.quiver(state[0], state[1], 
-                    np.cos(state[2]) , np.sin(state[2]) ,
-                    color='Red', scale=10  / (state[3] / 10), width=0.03, headwidth=8,headlength=8, label='Velocity')
-            
+                    arrow_scale = state[3]  * velocity_scale
+                    dx = arrow_scale * np.cos(state[2])
+                    dy = arrow_scale * np.sin(state[2])
+                    
+                    ax.arrow(state[0], state[1], dx, dy,
+                            head_width=0.2, head_length=0.08,
+                            fc='red', ec='red', linewidth=1.5, alpha=0.7)
+                    
 
         # for p in points_indices:
         #     self.robot.draw(ax, data[p, :])  # Draw robot at sampled points along the path
@@ -170,8 +179,8 @@ class Robot():
             return False
         x, y = state[0][0], state[0][1]
 
-        px = int((x / 10) * self._dilated_map[a].shape[1])
-        py = int((y / 10) * self._dilated_map[a].shape[0])
+        px = int((x / self._bounds[0]) * self._dilated_map[a].shape[1])
+        py = int((y / self._bounds[1]) * self._dilated_map[a].shape[0])
         
         if 0 <= px < self._dilated_map[a].shape[1] and 0 <= py < self._dilated_map[a].shape[0]:
             return self._dilated_map[a][py, px]
@@ -262,7 +271,6 @@ class RectangleRobot(Robot):
             angle = (math.pi / self.collision_check_angle_res) * i
             
  
-  
             y_grid, x_grid = np.ogrid[-radius_px:radius_px+1, -radius_px:radius_px+1]
             
             cos_a = np.cos(angle)

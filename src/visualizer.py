@@ -139,8 +139,11 @@ if __name__ == "__main__":
             
 
             planner_data = data['planner']
-            planner_data['robot'] = get_robot(data['robot'])
-
+            robot = get_robot(data['robot'])
+            if robot and hasattr(robot, 'collision_check_angle_res'):
+                #Disabling the multiple dilated map generation
+                robot.collision_check_angle_res = 1
+            planner_data['robot'] = robot
             #TODO add diffrent planners data implementatin finding class 
 
             filtered_params = {k: v for k, v in planner_data.items() if k in BasePathfinding.__init__.__code__.co_varnames}
