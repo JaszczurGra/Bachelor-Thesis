@@ -24,6 +24,9 @@ import math
 
 #TODO instead of time as name of saving name like for maps 
 #TODO robot setmap could be optimazed if the same map is used, no it couldnt as the w,h changes 
+
+
+#TODO should the velocity weight be 1 or smaller 
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
 parser.add_argument('-r', '--runs_per_planner', type=int, default=5, help='Number of runs per planner')
@@ -59,13 +62,13 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
         # robot.radius = random.uniform(0.2,0.6)
         robot.wheelbase = robot.lenght * 0.8 
-        robot.max_velocity = 4.0 + random.uniform(-1.0,1.0)
+        robot.max_velocity = 5.0 + random.uniform(-1.0,1.0)
         robot.acceleration = 4
         robot.max_steering_at_zero_v = random.uniform(math.pi / 10.0, math.pi / 6.0)
         robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
 
 
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,5.0,0),goal=(9.0,5.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,5.0,0),goal=(9.0,5.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.15)
         # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,5.0,1),goal=(9.0,5.0,0),max_runtime=max_runtime)
 
 
@@ -101,6 +104,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
 def save_to_file(planner, save_dir,thread,run, map_index):
     #TODO checking if dir exists? 
+    if args.verbose:
+        print(f"Saving path for Thread {thread} Run {run} Map {map_index} to file.")
+
     planner_data =  planner.print_info() 
     robot = planner_data.pop('robot', None)
     path_data = planner_data.pop('solved_path', None)

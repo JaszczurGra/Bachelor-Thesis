@@ -7,11 +7,12 @@ from scipy.ndimage import binary_dilation
 import numpy as np
 
 
-#TODO goalsetting change for rotations add 
+
 class BasePathfinding():
     def __init__(self,robot=None,map=None,start=(0,0,0),goal=(10,10,0),bounds=(10,10),max_runtime=30.0,goal_threshold=0.0):
         """bounds = (xmin,xmax,ymin,ymax)"""
 
+        #TODO remove this as this is only needed for old data 
         if len(bounds) > 2:
             bounds = (10,10)
         self.solved_path = None 
@@ -105,7 +106,7 @@ class BasePathfinding():
                     
                     ax.arrow(state[0], state[1], dx, dy,
                             head_width=0.2, head_length=0.08,
-                            fc='red', ec='red', linewidth=1.5, alpha=0.7)
+                            fc='red', ec='red', linewidth=1.5, alpha=0.7,label='Velocity at scale {:.2f}'.format(velocity_scale))
                     
 
         # for p in points_indices:
@@ -114,7 +115,7 @@ class BasePathfinding():
         self.robot.draw(ax, data[-1, :])  # Draw robot at goal
     
 
-        self.robot.draw_velocity_cones(ax, data[0, :]) 
+        self.robot.draw_velocity_cones(ax, data[0, :],velocity_scale) 
       
 
         if show:
@@ -192,11 +193,11 @@ class Robot():
         ax.add_patch(circle)
         #TODO show wheelbase
 
-    def draw_velocity_cones(self, ax, state):
+    def draw_velocity_cones(self, ax, state, velocity_scale=1.0):
 
         #TODO change cone into curves representing  steering
         x, y, theta = state[0], state[1], state[2]
-        cone_length = 1.5  # Fixed visual length
+        cone_length = self.max_velocity * velocity_scale
         
         # Calculate cone angles
         left_angle_max = theta + self.max_steering_at_zero_v
@@ -213,12 +214,12 @@ class Robot():
         outer_y = y + cone_length * np.sin(angles_outer)
         cone_outer_x = np.concatenate([[x], outer_x, [x]])
         cone_outer_y = np.concatenate([[y], outer_y, [y]])
-        ax.fill(cone_outer_x, cone_outer_y, color='red', alpha=0.2, edgecolor='red', linewidth=1.5)
+        ax.fill(cone_outer_x, cone_outer_y, color='red', alpha=0.2, edgecolor='red', linewidth=1.5,label='Velocity at scale {:.2f}'.format(velocity_scale))
         
         # Inner cone (max steering at max velocity) - darker, narrower
         angles_inner = np.linspace(right_angle_min, left_angle_min, n_points)
-        inner_x = x + cone_length * 0.9 * np.cos(angles_inner)
-        inner_y = y + cone_length * 0.9 * np.sin(angles_inner)
+        inner_x = x + cone_length * 1 * np.cos(angles_inner)
+        inner_y = y + cone_length * 1 * np.sin(angles_inner)
         cone_inner_x = np.concatenate([[x], inner_x, [x]])
         cone_inner_y = np.concatenate([[y], inner_y, [y]])
         ax.fill(cone_inner_x, cone_inner_y, color='red', alpha=0.4, edgecolor='red', linewidth=1.5)

@@ -156,7 +156,9 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    car_planner = SSTCarOMPL_acceleration(max_runtime=3, map=np.ones((100,100)),robot =RectangleRobot(0.5,1.0))
+    map = np.ones((100,100))
+    map[40:,20:50] = 0    
+    car_planner = SSTCarOMPL_acceleration(max_runtime=30, map=map,robot =RectangleRobot(0.5,1.0,max_velocity=5),vel_threshold=0.5,velocity_weight=0.2)
     print(car_planner.solve())
     car_planner.visualize()
 

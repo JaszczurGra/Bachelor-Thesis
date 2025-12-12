@@ -33,7 +33,7 @@ class Dubins_pathfinding(BasePathfinding):
         space = ob.DubinsStateSpace(self.robot.wheelbase / math.tan(self.robot.max_steering_at_zero_v), False)
 
         bounds = ob.RealVectorBounds(2)
-        bounds.low[0], bounds.high[0], bounds.low[1], bounds.high[1] = self.bounds
+        bounds.low[0], bounds.high[0], bounds.low[1], bounds.high[1] = 0,self.bounds[0],0,self.bounds[1]
         space.setBounds(bounds)
 
 
