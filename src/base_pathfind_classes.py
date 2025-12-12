@@ -295,23 +295,24 @@ class KinematicGoalRegion(ob.Goal):
         return  math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
     
 class KinematicGoalRegionWithVelocity(KinematicGoalRegion):
-    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=3.0,velocity_weight=0.01,bounds=(0,10,0,10),max_velocity=15.0):
+    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=3.0,velocity_weight=0.01,bounds=(10,10),max_velocity=15.0):
         super().__init__(si, goal_state, pos_threshold)
         self.vel_threshold = velocity_threshold 
-        self.velocity_weight = velocity_weight * (math.sqrt((bounds[1]-bounds[0])**2 + (bounds[3]-bounds[2])**2) / max_velocity)  # Normalize weight based on  max velocity and scale to postion bounds 
+        self.velocity_weight = velocity_weight * (bounds[1]**2 + bounds[0]**2) / max_velocity  # Normalize weight based on  max velocity and scale to postion bounds 
+        #bounds are added here to normalize the position 
 
+    #TODO is not sqrt the pos and vel dist workign properl y
 
     def isSatisfied(self, state):
  
-        #TODO normlaize to bounds DIFFRENT SHAPE 
-        pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)   # Normalize by max possible distance in bounds
+        pos_dist = (state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2   # Normalize by max possible distance in bounds
 
    
         v_actual = state[2][0]
         v_goal = self.goal_state_[2]
         v_dist = abs(v_actual - v_goal)
-        return pos_dist <= self.pos_threshold   and v_dist <= self.vel_threshold # Must be stopped and close
+        return pos_dist <= self.pos_threshold**2   and v_dist <= self.vel_threshold**2 # Must be stopped and close
     
     def distanceGoal(self, state):
-        pos_dist = math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
+        pos_dist = (state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2
         return pos_dist  + abs(state[2][0] - self.goal_state_[2]) * self.velocity_weight
