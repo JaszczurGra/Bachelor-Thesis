@@ -140,6 +140,7 @@ def get_robot(robot_data):
     robot_types = {
         'Robot': Robot,
         'RectangleRobot': RectangleRobot,
+        'PacejkaRectangleRobot': PacejkaRectangleRobot,
     }
 
     robot = robot_types.get(robot_data.get('class', 'Robot'), Robot)
@@ -235,10 +236,10 @@ class Robot():
 
 
 class RectangleRobot(Robot):
-    def __init__(self, width=0.5, lenght=1.0 ,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10,bounds = (10,10), collision_check_angle_res = 180):
+    def __init__(self, width=0.5, lenght=1.0 ,wheelbase=0.7,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10,bounds = (10,10), collision_check_angle_res = 180):
         "collision_check_angle_res : number of angles to check for collision "
         
-        super().__init__( 0 ,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration,bounds)
+        super().__init__( wheelbase ,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration,bounds)
         self.width = width
         self.lenght = lenght
         self.collision_check_angle_res = collision_check_angle_res
@@ -292,6 +293,254 @@ class RectangleRobot(Robot):
         super().draw(ax, state)
         rect = plt.Rectangle((state[0] - self.lenght / 2.0,   state[1] - self.width / 2.0), self.lenght, self.width, angle=math.degrees(state[2]), color='green', alpha=0.5,rotation_point='center')
         ax.add_patch(rect)
+
+
+
+
+class PacejkaTireModel():
+    def __init__(self, Sx_p, Alpha_p, By, Cy, Dy, Ey, Bx, Cx, Dx, Ex) -> None:
+        self.Sx_p = Sx_p
+        self.Alpha_p = Alpha_p
+        self.By = By
+        self.Cy = Cy
+        self.Dy = Dy
+        self.Ey =   Ey
+        self.Bx = Bx
+        self.Cx = Cx
+        self.Dx = Dx
+        self.Ex = Ex
+
+    def tire_forces_model(self, slip_angle_rad, slip_ratio):
+        #[1] Bakker, E., Nyborg, L., and Pacejka, H.B.
+        #   Tyre modelling for use in vehicle dynamics studies. United States: N. p., 1987. Web
+        
+        #[2] W. F. Milliken and D. L. Milliken,
+        #   Race Car Vehicle Dynamics.Warrendale, PA, USA: SAE, 1995.
+        
+        # https://skill-lync.com/student-projects/Combined-slip-correction-using-Pacejka-tire-model-25918
+        # https://www.researchgate.net/publication/344073372_Tire_Modeling_Using_Pacejka_Model
+        # Unpack the state variables
+
+
+
+        # alpha from radians to degrees
+        slip_angle_deg = slip_angle_rad * 180.0 / math.pi
+        
+        # Calculate normalized slip ratio and slip angle
+        Sx_norm = slip_ratio / self.Sx_p
+        Alpha_norm = slip_angle_deg / self.Alpha_p
+        
+        # Compute the resultant slip
+        S_resultant = math.sqrt(Sx_norm**2 + Alpha_norm**2)
+        
+        # Find the modified slip factors
+        Sx_mod = S_resultant * self.Sx_p
+        Alpha_mod = S_resultant * self.Alpha_p
+        
+
+        #TODO can't divide by 0 
+        if S_resultant < 1e-6:
+            print(S_resultant)
+
+            S_resultant = 1e-6
+        # Calculate the Lateral Force using Pacejka formula
+        Alpha_final = Alpha_mod #+ self.Shy
+        Fy = ((Alpha_norm / S_resultant) * self.Dy * math.sin(self.Cy * math.atan((self.By * Alpha_final) - 
+            self.Ey * -1.0 * (self.By * Alpha_final - math.atan(self.By * Alpha_final))))) #+ self.Svy
+        
+        # Calculate the Longitudinal Force using Pacejka formula
+        Sx_final = Sx_mod #+ self.Shx
+        Fx = ((Sx_norm / S_resultant) * self.Dx * math.sin(self.Cx * math.atan((self.Bx * Sx_final) - 
+            self.Ex * -1.0 * (self.Bx * Sx_final - math.atan(self.Bx * Sx_final))))) #+ self.Svx
+        
+        return Fx, - Fy
+
+
+    def forward_front(self, robot, x):
+        fric_xf, fric_yf = self.tire_forces_model(self.slip_angle_front_func(x, robot),
+                                                  self.slip_ratio_front_func(x, robot))
+        
+        Fxf = self.Fz_front(robot) * fric_xf
+        Fyf = self.Fz_front(robot) * fric_yf
+        return [Fxf, Fyf]
+    
+
+
+    def forward_rear(self,robot, x):
+        fric_xr, fric_yr = self.tire_forces_model(self.slip_angle_rear_func(x, robot),
+                                                  self.slip_ratio_func(x, robot))
+        
+        Fxr = self.Fz_rear(robot) * fric_xr
+        Fyr = self.Fz_rear(robot) * fric_yr
+
+        return [Fxr, Fyr]
+    
+        
+    def Fz_front(self, wp):
+        return wp.m * wp.g * wp.lr / wp.L   
+    
+    def Fz_rear(self, wp):
+        return wp.m * wp.g * PacejkaTireModel.lf(wp) / wp.L
+
+
+    @staticmethod
+    def lf(wp):
+        return wp.L - wp.lr
+
+    @staticmethod
+    def slip_angle_front_func(wx, wp):        
+        return math.atan((wx.v_y + PacejkaTireModel.lf(wp) * wx.r) / (wx.v_x + wp.eps)) - wx.delta
+
+    @staticmethod
+    def slip_angle_rear_func(wx, wp):
+        return math.atan((wx.v_y - PacejkaTireModel.lf(wp) * wx.r) / (wx.v_x + wp.eps))
+    @staticmethod
+    def slip_ratio_func(wx, wp):
+        slip_ratio = (wx.omega_wheels - wx.v_x) / \
+            (wx.v_x + wp.eps)
+        return slip_ratio
+
+    @staticmethod
+    def slip_ratio_front_func(wx, wp):
+        v_front = wx.v_x * \
+            math.cos(wx.delta) + (wx.v_y + wx.r *
+                                   wp.lr) * math.sin(wx.delta)
+        slip_ratio = (wx.omega_wheels - v_front) / \
+            (v_front + wp.eps)
+        return slip_ratio
+    
+    def print_info(self):
+        return {'class':self.__class__.__name__} | {
+                    key: value
+                    for key, value in self.__dict__.items() 
+                    if not key.startswith('_') and not callable(value) 
+                } 
+    
+
+
+from dataclasses import dataclass
+
+
+
+@dataclass
+class State:
+    x: float
+    y: float
+    yaw: float
+    v_x: float
+    v_y: float
+    r: float
+    omega_wheels: float
+    delta: float 
+
+
+class PacejkaRectangleRobot(RectangleRobot):
+    def __init__(self, width: float=0.5, length: float=1.0, m=5.1,g=9.81,I_z=0.1435,L=0.33,lr=0.1703,Cd0=0.0008,Cd1=0.0006,Cd2=0.0003,R=0.05,tau_omega=0.022,tau_delta=0.022,eps=0.1,front_tire=PacejkaTireModel(  Sx_p= 0.1117,
+  Alpha_p= 7.5586,
+  By= 0.0569,
+  Cy= 0.5797,
+  Dy= 0.8745,
+  Ey= 0.2432,
+  Bx= 2.8452,
+  Cx= 0.6443,
+  Dx= 0.8216,
+  Ex= 0.0051),rear_tire=PacejkaTireModel(Sx_p= 0.1215,
+  Alpha_p= 6.9388,
+  By= 0.0682,
+  Cy= 0.5788,
+  Dy= 0.8723,
+  Ey= 4.6495,
+  Bx= 4.4566,
+  Cx= 1.5544,
+  Dx= 0.8968,
+  Ex= 8.0218)) -> None:
+        super().__init__(width, length,wheelbase=L)
+
+        self.front_tire = front_tire
+        self.rear_tire = rear_tire
+        self.m = m
+        self.g = g
+        self.I_z = I_z
+        self.L = L
+        self.lr = lr
+        self.Cd0 = Cd0
+        self.Cd1 = Cd1
+        self.Cd2 = Cd2
+        self.R = R
+        self.tau_omega = tau_omega
+        self.tau_delta = tau_delta
+        self.eps = eps  
+
+        self._i = 0
+    
+    def forward(self, state, control, result):
+        """
+        control: [omega_wheels_ref, delta_ref]
+        state: [x,y, yaw, v_x, v_y, r, omega_wheels, delta]
+        """
+
+        omega_wheels_ref = control[0]
+        delta_ref = control[1]
+
+
+
+        wx = {
+            'x': state[0],
+            'y': state[1],
+            'yaw': state[2],
+            'v_x': state[3],
+            'v_y': state[4],
+            'r': state[5],
+            'omega_wheels': state[6],
+            'delta': state[7],
+        }
+
+        wx  = State(**wx)
+
+
+        # d = 100000
+        # if self.i % d == 0: 
+        #     print(self.i , '        '      ,wx)
+        # self.i += 1
+
+        Fx_f, Fy_f, Fx_r, Fy_r = self.front_tire.forward_front(self, wx) + self.rear_tire.forward_rear(self, wx)
+
+
+        F_drag = math.copysign(self.Cd0, wx.v_x) +\
+            self.Cd1 * wx.v_x +\
+            self.Cd2 * wx.v_x * wx.v_x
+        
+
+        v_x_dot = 1.0 / self.m * (Fx_r + Fx_f * math.cos(wx.delta) -
+                               Fy_f * math.sin(wx.delta) - F_drag + self.m * wx.v_y * wx.r)
+
+        v_y_dot = 1.0 / self.m * (Fx_f * math.sin(wx.delta) +
+                               Fy_r + Fy_f * math.cos(wx.delta) - self.m * wx.v_x * wx.r)
+
+        r_dot = 1.0 / self.I_z * \
+            ((Fx_f * math.sin(wx.delta) + Fy_f *
+             math.cos(wx.delta)) * (self.L - self.lr) - Fy_r * self.lr)
+
+        omega_wheels_dot = (omega_wheels_ref - wx.omega_wheels) / self.tau_omega
+
+        delta_dot = (delta_ref - wx.delta) / self.tau_delta
+
+        x_dot = (wx.v_x * math.cos(wx.yaw) - wx.v_y * math.sin(wx.yaw))
+        y_dot = (wx.v_x * math.sin(wx.yaw) + wx.v_y * math.cos(wx.yaw))
+        yaw_dot = wx.r
+
+
+
+        result[0] = x_dot
+        result[1] = y_dot
+        result[2] = yaw_dot
+        result[3] = v_x_dot
+        result[4] = v_y_dot
+        result[5] = r_dot
+        result[6] = omega_wheels_dot
+        result[7] = delta_dot
+
+
 
 class KinematicGoalRegion(ob.Goal):
     def __init__(self, si, goal_state, pos_threshold=0.5):
