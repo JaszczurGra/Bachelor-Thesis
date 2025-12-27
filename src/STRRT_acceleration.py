@@ -67,7 +67,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
         pos_bounds = ob.RealVectorBounds(2)
         pos_bounds.setLow(0.0)
-        pos_bounds.setHigh(10.0)
+        pos_bounds.setHigh(self.bounds[1])
         r2 = ob.RealVectorStateSpace(2)
         r2.setBounds(pos_bounds)
 

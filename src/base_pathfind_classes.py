@@ -45,6 +45,8 @@ class BasePathfinding():
 
 
     def visualize(self, ax=None, path_data_str=None,point_iteration=9,path_iteration=1,velocity_scale =0.2):
+
+        '''x, y, theta, v'''
         show = False
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 8))
@@ -258,6 +260,7 @@ class RectangleRobot(Robot):
         return super().check_bounds(state)
 
     def set_map(self, map):
+
         if map is None:
             return
         diagonal = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
@@ -271,7 +274,6 @@ class RectangleRobot(Robot):
         for i in range(self.collision_check_angle_res):
             angle = (math.pi / self.collision_check_angle_res) * i
             
- 
             y_grid, x_grid = np.ogrid[-radius_px:radius_px+1, -radius_px:radius_px+1]
             
             cos_a = np.cos(angle)
@@ -282,7 +284,6 @@ class RectangleRobot(Robot):
 
             rect_mask = (np.abs(x_rot) <= rect_width_px) & (np.abs(y_rot) <= rect_lenght_px)
             self._dilated_map.append(binary_dilation(map == 0, structure=rect_mask))
-
 
         # self.radius = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
         self.radius = 0 

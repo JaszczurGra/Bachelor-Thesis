@@ -5,6 +5,7 @@ from STRRT_acceleration import SSTCarOMPL_acceleration
 from RRT import RRT_Planer
 from STRRT import STRRT_Planer
 from  Dubins import Dubins_pathfinding
+from Pacejka import Pacajka_pathfinding,PacajkaRectangleRobot   
 import time 
 from multiprocessing import Pool, cpu_count,Manager
 from base_pathfind_classes import Robot,RectangleRobot
@@ -25,7 +26,7 @@ import math
 #TODO instead of time as name of saving name like for maps 
 #TODO robot setmap could be optimazed if the same map is used, no it couldnt as the w,h changes 
 
-
+#TODO bounds automatic by scale of img 
 #TODO should the velocity weight be 1 or smaller 
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
@@ -44,11 +45,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
     run_count = 0
     
     while run_count < runs_per_planner and not stop_event.is_set():
-        if args.verbose:
-            print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
+
         start_time = time.time()
         
-    
 
         if maps is not None and map_indexes is not None:
             map_data = maps[map_indexes[planner_id][run_count]]
@@ -56,26 +55,36 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
             map_data = np.ones((50,50))
         # obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
  
-        robot = RectangleRobot( )
-        robot.width = random.uniform(0.01,0.5)
-        robot.lenght = random.uniform(0.01,0.5) 
+        # robot = RectangleRobot( )
+        # robot.width = random.uniform(0.01,0.5)
+        # robot.lenght = random.uniform(0.01,0.5) 
+
+        # robot.width = 1
+        # robot.lenght = 1
+
 
         # robot.radius = random.uniform(0.2,0.6)
-        robot.wheelbase = robot.lenght * 0.8 
-        robot.max_velocity = 5.0 + random.uniform(-1.0,1.0)
-        robot.acceleration = 4
-        robot.max_steering_at_zero_v = random.uniform(math.pi / 10.0, math.pi / 6.0)
-        robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
+        # robot.wheelbase = robot.lenght * 0.5
+        # robot.max_velocity = 5.0 + random.uniform(-1.0,1.0)
+        # robot.acceleration = 4
+        # robot.max_steering_at_zero_v = random.uniform(math.pi / 10.0, math.pi / 6.0)
+        # robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
+        # robot.max_steering_at_zero_v = 0
+        # robot.max_steering_at_max_v = 0
+        
+        robot=RectangleRobot(0.5,1.0,collision_check_angle_res=8)
 
+        # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.15)
+        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),max_runtime=max_runtime,bounds=(10,10))
 
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,5.0,0),goal=(9.0,5.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.15)
-        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.0,5.0,1),goal=(9.0,5.0,0),max_runtime=max_runtime)
+        car_planner = Pacajka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacajkaRectangleRobot(0.5,1.0),vel_threshold=0.5,velocity_weight=0.0,start=(2.0,2.0,0.0),goal=(8.0,2.0,0.0), bounds=(10,10))
 
-
+        if args.verbose:
+            print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
         # car_planner = STRRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
-       
+            print(f"Car planner params: {car_planner.print_info()}")
         # car_planner = RRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
         solved = car_planner.solve()
 

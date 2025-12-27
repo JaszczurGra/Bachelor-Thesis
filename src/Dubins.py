@@ -22,9 +22,8 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 
-
 class Dubins_pathfinding(BasePathfinding):
-    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0,0),goal=(9.0,9.0,0),max_runtime=30.0,bounds=(0,10,0,10),interpolate_steps=50):
+    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0,0),goal=(9.0,9.0,0),max_runtime=30.0,bounds=(10,10),interpolate_steps=50):
         super().__init__(robot, map, start, goal, bounds, max_runtime) 
         self.interpolate_steps = interpolate_steps
         self.robot.set_map(map)
@@ -89,7 +88,7 @@ if __name__ == "__main__":
     map[0,0] = 0
     map[30:,20:50] = 0 
 
-    car_planner = Dubins_pathfinding(max_runtime=30,robot=RectangleRobot(0.5,1.0),map=map,start=(1,5.0,0),goal=(9.0,9.0,0))
+    car_planner = Dubins_pathfinding(max_runtime=6,robot=RectangleRobot(0.5,1.0),map=map,start=(1,5.0,0),goal=(9.0,9.0,0),bounds=(10,15))
     print(car_planner.solve())
     car_planner.visualize()
     plt.show()
