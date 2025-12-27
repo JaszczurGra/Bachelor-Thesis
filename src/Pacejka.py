@@ -39,15 +39,15 @@ class Pacejka_pathfinding(BasePathfinding):
         self.vel_threshold = vel_threshold
         self.pos_treshold = pos_treshold
 
+        robot.acceleration = 0 
+        robot.max_steering_at_max_v = 0 
 
         robot.eps = propagate_step_size
 
-
-        #TODO implement this for pacajka car model 
         if selection_radius is None:    
-            self.selection_radius = 300 * 0.5 * 0.2 *  2
+            self.selection_radius = robot.max_velocity * propagate_step_size * control_duration[1] *  2
         if pruning_radius is None:
-            self.pruning_radius = 300 * 0.5 * 0.2 * 0.5
+            self.pruning_radius = robot.max_velocity * propagate_step_size * control_duration[1] * 0.5
 
 
 
@@ -64,26 +64,35 @@ class Pacejka_pathfinding(BasePathfinding):
 
         pos_bounds = ob.RealVectorBounds(2)
         pos_bounds.setLow(0.0)
-        pos_bounds.setHigh(self.bounds[1])
+        pos_bounds.setHigh(0, self.bounds[0])
+        pos_bounds.setHigh(1, self.bounds[1])
+
         r2 = ob.RealVectorStateSpace(2)
         r2.setBounds(pos_bounds)
 
         so2 = ob.SO2StateSpace()
 
 
-       #TODO set bounds for paramas 
+
+        # TODO shouldn't be bound ? 
         v_bounds = ob.RealVectorBounds(2)
-        v_bounds.setLow (0)
-        v_bounds.setHigh (15.0)
+        v_bounds.setLow (-self.robot.max_velocity)
+        v_bounds.setHigh (self.robot.max_velocity)
         v_state = ob.RealVectorStateSpace(2)
         v_state.setBounds(v_bounds)
 
 
 
         o_bounds = ob.RealVectorBounds(3)
-        #TODO set bounds for paramas 
-        o_bounds.setLow(-300)
-        o_bounds.setHigh(300)
+        #TODO this is refrence should the min val be 0 or -max omega for faster slowing down
+
+        o_bounds.setLow(0,-10)
+        o_bounds.setHigh(0,10)
+        o_bounds.setLow(1,-self.robot.max_velocity / self.robot.R)
+        o_bounds.setHigh(1,self.robot.max_velocity / self.robot.R)
+        o_bounds.setLow(2,-10)
+        o_bounds.setHigh(2,10)
+
         other_params = ob.RealVectorStateSpace(3)
         other_params.setBounds(o_bounds)
    
@@ -93,25 +102,21 @@ class Pacejka_pathfinding(BasePathfinding):
         
         space.addSubspace(r2, 1.0)      # x, y
         space.addSubspace(so2, 1.0)     # theta
-        space.addSubspace(v_state,1.0)
-        space.addSubspace(other_params, 1.0)    # vx, vy
+        space.addSubspace(v_state,1.0)   # vx, vy
+        space.addSubspace(other_params, 1.0) #r omega_w, delta
 
         space.lock() # Finalize the state space structure
-
-        """
-        control: [omega_wheels_ref, delta_ref]
-        state: [x,y, yaw, v_x, v_y, r, omega_wheels, delta]
-        """
 
         cspace = oc.RealVectorControlSpace(space, 2)
         c_bounds = ob.RealVectorBounds(2)
         #omega wheels speed refrence
         c_bounds.setLow(0, 0.05) 
-        c_bounds.setHigh(0, 300)
+        c_bounds.setHigh(0, self.robot.max_velocity / self.robot.R)
 
         #delta bounds
-        c_bounds.setLow(1, -math.pi/4)
-        c_bounds.setHigh(1, math.pi/4)
+        #TODO is this acutal max steering agngle? 
+        c_bounds.setLow(1, -self.robot.max_steering_at_zero_v)
+        c_bounds.setHigh(1, self.robot.max_steering_at_zero_v)
         cspace.setBounds(c_bounds)
 
 
@@ -122,12 +127,12 @@ class Pacejka_pathfinding(BasePathfinding):
 
         validity_checker = ob.StateValidityCheckerFn(partial(self.is_state_valid, si))
         si.setStateValidityChecker(validity_checker)
-        si.setStateValidityCheckingResolution(0.3)
+        si.setStateValidityCheckingResolution(0.2)
 
         #TODO add adaptive ode solver
         ode = oc.ODE(self.propagate)
-        odeSolver = oc.ODEBasicSolver(si, ode)
-        # odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
+        # odeSolver = oc.ODEBasicSolver(si, ode)
+        odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
 
         propagator = oc.ODESolver.getStatePropagator(odeSolver)
         si.setStatePropagator(propagator)
@@ -138,11 +143,13 @@ class Pacejka_pathfinding(BasePathfinding):
         pdef = ob.ProblemDefinition(si)
 
 
+        intital_v = 0.001
+
         start = ob.State(si)
         start()[0][0], start()[0][1] = self.start[:2]
         start()[1].value,start()[2][0] = (self.start[2],0.0) #(math.pi / 2.0,0.0)
-        start()[2][0], start()[2][1] = (0.1,0) #intial v
-        start()[3][0], start()[3][1], start()[3][2] = (0.0,0.1 / 0.5,0.0) #intial r, omega wheels, delta
+        start()[2][0], start()[2][1] = (intital_v,0) #intial v
+        start()[3][0], start()[3][1], start()[3][2] = (0.0,intital_v/ self.robot.R,0.0) #intial r, omega wheels, delta
         goal = ob.State(si)
         goal()[0][0], goal()[0][1] = self.goal[:2]
         goal()[1].value, goal()[2][0] = (self.goal[2], 0.0)
@@ -156,11 +163,11 @@ class Pacejka_pathfinding(BasePathfinding):
         pdef.setOptimizationObjective(ob.StateCostIntegralObjective(si, True))
 
         planner = oc.SST(si)
-        planner = oc.RRT(si)
+        # planner = oc.RRT(si)
        
         planner.setProblemDefinition(pdef)
-        # planner.setPruningRadius(self.pruning_radius)
-        # planner.setSelectionRadius(self.selection_radius)
+        planner.setPruningRadius(self.pruning_radius)
+        planner.setSelectionRadius(self.selection_radius)
 
 
         planner.setup()
@@ -175,7 +182,7 @@ class Pacejka_pathfinding(BasePathfinding):
             return pdef.hasExactSolution()
         return None
     
-    def visualize(self, ax=None, path_data_str=None,point_iteration=9,path_iteration=1,velocity_scale =0.2):
+    def visualize(self, ax=None, path_data_str=None,point_iteration=3,path_iteration=1,velocity_scale =0.2):
         data = None 
         path_data_str = self.solved_path 
         if isinstance(path_data_str, list):
@@ -203,8 +210,11 @@ if __name__ == "__main__":
     ou.setLogLevel(ou.LOG_DEBUG) 
     map = np.ones((100,100))
     map[0,0] = 0 
-    # map[40:,20:50] = 0    
-    car_planner = Pacejka_pathfinding(max_runtime=60, map=map,robot =PacejkaRectangleRobot(0.1,0.1),vel_threshold=0.5,velocity_weight=0)
+    # map[40:,20:50] = 0
+    # 
+    # 
+    # TODO for goal region normalize the velocity from x,y not only take x into consideration      
+    car_planner = Pacejka_pathfinding(max_runtime=60, map=map,robot =PacejkaRectangleRobot(0.5,1,max_velocity=200),vel_threshold=0.5,velocity_weight=0.5)
     print('solved', car_planner.solve())
     car_planner.visualize()
 

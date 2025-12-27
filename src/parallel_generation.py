@@ -77,7 +77,7 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.15)
         # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),max_runtime=max_runtime,bounds=(10,10))
 
-        car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(0.5,1.0),vel_threshold=0.5,velocity_weight=0.0,start=(2.0,2.0,0.0),goal=(8.0,2.0,0.0), bounds=(10,10))
+        car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(0.5,1.0,max_velocity=200),vel_threshold=0.5,velocity_weight=0.0,start=(2.0,2.0,0.0),goal=(8.0,2.0,0.0), bounds=(10,10))
 
         if args.verbose:
             print(f"[Planner {planner_id}] Starting run #{run_count + 1}")

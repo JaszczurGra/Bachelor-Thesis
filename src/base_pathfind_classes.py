@@ -239,7 +239,7 @@ class RectangleRobot(Robot):
     def __init__(self, width=0.5, lenght=1.0 ,wheelbase=0.7,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10,bounds = (10,10), collision_check_angle_res = 180):
         "collision_check_angle_res : number of angles to check for collision "
         
-        super().__init__( wheelbase ,width,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration,bounds)
+        super().__init__( 0,wheelbase,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration,bounds)
         self.width = width
         self.lenght = lenght
         self.collision_check_angle_res = collision_check_angle_res
@@ -435,7 +435,7 @@ class State:
 
 
 class PacejkaRectangleRobot(RectangleRobot):
-    def __init__(self, width: float=0.5, length: float=1.0, m=5.1,g=9.81,I_z=0.1435,L=0.33,lr=0.1703,Cd0=0.0008,Cd1=0.0006,Cd2=0.0003,R=0.05,tau_omega=0.022,tau_delta=0.022,eps=0.1,front_tire=PacejkaTireModel(  Sx_p= 0.1117,
+    def __init__(self, width: float=0.5, length: float=1.0, max_velocity=10,m=5.1,g=9.81,I_z=0.1435,L=0.33,lr=0.1703,Cd0=0.0008,Cd1=0.0006,Cd2=0.0003,R=0.05,tau_omega=0.022,tau_delta=0.022,eps=0.1,front_tire=PacejkaTireModel(  Sx_p= 0.1117,
   Alpha_p= 7.5586,
   By= 0.0569,
   Cy= 0.5797,
@@ -454,8 +454,10 @@ class PacejkaRectangleRobot(RectangleRobot):
   Cx= 1.5544,
   Dx= 0.8968,
   Ex= 8.0218)) -> None:
-        super().__init__(width, length,wheelbase=L)
+        super().__init__(width, length,wheelbase=L,max_velocity=max_velocity,bounds=(10,10))
 
+
+        #TODO check if the tire is dict then reconstruct it 
         self.front_tire = front_tire
         self.rear_tire = rear_tire
         self.m = m
