@@ -228,9 +228,9 @@ class Robot():
 
     def print_info(self):
         return {'class':self.__class__.__name__} | {
-                    key: value 
+                    key: value.print_info() if hasattr(value, 'print_info') and callable(getattr(value, 'print_info')) else value
                     for key, value in self.__dict__.items() 
-                    if not key.startswith('_') and not callable(value)
+                    if not key.startswith('_') and not callable(value) 
                 } 
 
 

@@ -131,6 +131,13 @@ class PacejkaTireModel():
             (v_front + wp.eps)
         return slip_ratio
     
+    def print_info(self):
+        return {'class':self.__class__.__name__} | {
+                    key: value
+                    for key, value in self.__dict__.items() 
+                    if not key.startswith('_') and not callable(value) 
+                } 
+    
 
 
 from dataclasses import dataclass
@@ -149,7 +156,7 @@ class State:
     delta: float 
 
 
-class PacajkaRectangleRobot(RectangleRobot):
+class PacejkaRectangleRobot(RectangleRobot):
     def __init__(self, width: float, length: float) -> None:
         super().__init__(width, length)
 
@@ -267,10 +274,12 @@ class PacajkaRectangleRobot(RectangleRobot):
         result[6] = omega_wheels_dot
         result[7] = delta_dot
 
+
+
    
 
-class Pacajka_pathfinding(BasePathfinding):
-    def __init__(self,robot:PacajkaRectangleRobot=PacajkaRectangleRobot(.5,1),map=None,start=(1.0,1.0, 0.0),goal=(8.0,1.0,0.0), bounds=(10,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
+class Pacejka_pathfinding(BasePathfinding):
+    def __init__(self,robot:PacejkaRectangleRobot=PacejkaRectangleRobot(.5,1),map=None,start=(1.0,1.0, 0.0),goal=(8.0,1.0,0.0), bounds=(10,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
         """
         set the velocity weight to 0 to ignore velocity in goal region
         """
@@ -371,7 +380,7 @@ class Pacajka_pathfinding(BasePathfinding):
         #TODO add adaptive ode solver
         ode = oc.ODE(self.propagate)
         odeSolver = oc.ODEBasicSolver(si, ode)
-        odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
+        # odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
 
         propagator = oc.ODESolver.getStatePropagator(odeSolver)
         si.setStatePropagator(propagator)
@@ -437,11 +446,18 @@ class Pacajka_pathfinding(BasePathfinding):
         return 0
 
 if __name__ == "__main__": 
+
+    r = PacejkaRectangleRobot(.5,1)
+    print(r.print_info())
+    
+    pass
+
+
     ou.setLogLevel(ou.LOG_DEBUG) 
     map = np.ones((100,100))
     map[0,0] = 0 
     # map[40:,20:50] = 0    
-    car_planner = Pacajka_pathfinding(max_runtime=60, map=map,robot =PacajkaRectangleRobot(0.1,0.1),vel_threshold=0.5,velocity_weight=0)
+    car_planner = Pacejka_pathfinding(max_runtime=60, map=map,robot =PacejkaRectangleRobot(0.1,0.1),vel_threshold=0.5,velocity_weight=0)
     print('solved', car_planner.solve())
     car_planner.visualize()
 
