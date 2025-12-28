@@ -486,24 +486,13 @@ class PacejkaRectangleRobot(RectangleRobot):
 
 
 
-        wx = {
-            'x': state[0],
-            'y': state[1],
-            'yaw': state[2],
-            'v_x': state[3],
-            'v_y': state[4],
-            'r': state[5],
-            'omega_wheels': state[6],
-            'delta': state[7],
-        }
+        wx  = State(*state)
 
-        wx  = State(**wx)
-
-
-        # d = 100000
-        # if self.i % d == 0: 
-        #     print(self.i , '        '      ,wx)
-        # self.i += 1
+        
+        d = 100000
+        if self._i % d == 0: 
+            print(self._i , '        '      ,wx)
+        self._i += 1
 
         Fx_f, Fy_f, Fx_r, Fy_r = self.front_tire.forward_front(self, wx) + self.rear_tire.forward_rear(self, wx)
 
