@@ -6,10 +6,9 @@ import random
 import time
 
 class MapGenerator:
-    def __init__(self, size=300):
-        self.size = size
-        self.width = size
-        self.height = size
+    def __init__(self, w=300, h=300):
+        self.width = w
+        self.height = h
         
         self.cx = self.width / 2
         self.cy = self.height - 1
@@ -77,9 +76,9 @@ class MapGenerator:
 
 if __name__ == "__main__":
     OUTPUT_FOLDER = "dataset_car_width"
-    NUM_MAPS = 5
+    NUM_MAPS = 8
     
-    gen = MapGenerator(size=300)
+    gen = MapGenerator(300,300)
     
     print(f"Generating {NUM_MAPS} maps...")
     

@@ -6,15 +6,16 @@ import random
 import time
 
 class MapGenerator:
-    def __init__(self, size=300, wall_thickness=10):
-        self.size = size
+    def __init__(self, w=300, h=300, wall_thickness=10):
+        self.width = w
+        self.height = h
         self.wall_thickness = wall_thickness
-        self.mid_y = size // 2
+        self.mid_y = h // 2
         
         self.divider_gap = 40
 
     def _draw_chicane(self, grid, row_start, row_end, difficulty):
-        mid_x = self.size // 2
+        mid_x = self.width // 2
         
         if difficulty == 'hard':
             # Hard gap
@@ -39,7 +40,7 @@ class MapGenerator:
              center_x + spacing_x : center_x + spacing_x + self.wall_thickness] = 0
 
     def generate_map(self):
-        grid = np.ones((self.size, self.size), dtype=np.uint8)
+        grid = np.ones((self.width, self.height), dtype=np.uint8)
 
         grid[0:5, :] = 0
         grid[-5:, :] = 0
@@ -51,7 +52,7 @@ class MapGenerator:
 
         self._draw_chicane(grid, row_start=0, row_end=div_start_y, difficulty='easy')
         
-        self._draw_chicane(grid, row_start=div_end_y, row_end=self.size, difficulty='hard')
+        self._draw_chicane(grid, row_start=div_end_y, row_end=self.height, difficulty='hard')
 
         return grid
 
@@ -65,9 +66,9 @@ class MapGenerator:
 
 if __name__ == "__main__":
     OUTPUT_FOLDER = "dataset_turn_rad"
-    NUM_MAPS = 5
+    NUM_MAPS = 8
 
-    gen = MapGenerator(size=300)
+    gen = MapGenerator(300,300)
 
     for i in range(NUM_MAPS):
         map_data = gen.generate_map()

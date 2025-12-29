@@ -489,10 +489,10 @@ class PacejkaRectangleRobot(RectangleRobot):
         wx  = State(*state)
 
         
-        d = 100000
-        if self._i % d == 0: 
-            print(self._i , '        '      ,wx)
-        self._i += 1
+        # d = 100000
+        # if self._i % d == 0: 
+        #     print(self._i , '        '      ,wx)
+        # self._i += 1
 
         Fx_f, Fy_f, Fx_r, Fy_r = self.front_tire.forward_front(self, wx) + self.rear_tire.forward_rear(self, wx)
 

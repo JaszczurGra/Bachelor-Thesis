@@ -23,8 +23,10 @@ python src/visualizer.py -d data/xd/ -n 3
 - `-n 3`: Show 3 plots at once
 
 ### Generate Maps
-Create random obstacle maps:
+Create size and turning radius maps 
 ```bash
-python src/map_generator.py -n 50
-```
-- `-n 50`: Generate 50 maps
+ python map_creation/map_gen.py -s 10 -t 10 -o test1 
+ ```
+ - s - num of size maps 
+ - t - num of turning maps 
+ - o - output folder in maps 

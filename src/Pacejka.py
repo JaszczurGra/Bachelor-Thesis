@@ -17,9 +17,8 @@ import io
 
     
 
-#TODO desarializing for vis 
 
-
+#TODO get time cost from path 
   
 
 
