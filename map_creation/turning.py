@@ -65,19 +65,13 @@ class MapGenerator:
         print(f"Saved {filename}")
 
 if __name__ == "__main__":
-    OUTPUT_FOLDER = "dataset_turn_rad"
-    NUM_MAPS = 8
-
     gen = MapGenerator(300,300)
 
-    for i in range(NUM_MAPS):
-        map_data = gen.generate_map()
-        
-        if i == 0:
-            plt.figure(figsize=(6, 6))
-            plt.imshow(map_data, cmap='gray')
-            plt.title("Turn radius map")
-            plt.show()
+    print("Previewing turn radius map...")
 
-        fname = f"map_{i}_{int(time.time())}.png"
-        gen.save_map(map_data, OUTPUT_FOLDER, fname)
+    map_data = gen.generate_map()
+
+    plt.figure(figsize=(6, 6))
+    plt.imshow(map_data, cmap='gray')
+    plt.title("Turn radius map")
+    plt.show()
