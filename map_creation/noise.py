@@ -28,13 +28,15 @@ class MapGenerator:
     # Change parameters here
     def generate_map(self, 
                      coverage_percent=0.2, 
-                     min_rect_size=10, 
-                     max_rect_size=40,
+                     min_rect_size=40, 
+                     max_rect_size=60,
                      safe_radius=60):
         
         self.safe_radius = safe_radius
         img = Image.new('L', (self.width, self.height), 255)
         draw = ImageDraw.Draw(img)
+
+        grid_mask = np.zeros((self.height, self.width), dtype=bool)
         
         # Triangle
         tri_base_width = 60
@@ -72,8 +74,8 @@ class MapGenerator:
                 continue 
 
             draw.rectangle([x, y, x+w, y+h], fill=0)
-            current_obstacle_pixels += (w * h)
-
+            grid_mask[y:y+h, x:x+w] = True
+            current_obstacle_pixels = np.count_nonzero(grid_mask)
         return img
 
     def save_map(self, img, folder, filename):
