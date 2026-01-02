@@ -6,7 +6,7 @@ import numpy as np
 import math
 from functools import partial
 from ompl import geometric as og # needed for asGeometric()
-from base_pathfind_classes import RectangleRobot, Robot,BasePathfinding
+from base_pathfind_classes import RectangleRobot, Robot, BasePathfinding
 
 import time 
 

@@ -20,11 +20,9 @@ from PIL import Image
 import numpy as np
 import math
 
-#TODO reverse the map color 0 free 1 occupied now is inverse ?
+
 #TODO should the structure be map and paths or link to map 
 
-#TODO instead of time as name of saving name like for maps 
-#TODO robot setmap could be optimazed if the same map is used, no it couldnt as the w,h changes 
 
 #TODO bounds automatic by scale of img 
 #TODO should the velocity weight be 1 or smaller 
@@ -32,14 +30,16 @@ parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
 parser.add_argument('-r', '--runs_per_planner', type=int, default=5, help='Number of runs per planner')
 parser.add_argument('-t', '--max_runtime', type=float, default=3.0, help='Maximum runtime per planner run (seconds)')
+parser.add_argument('--save', type=str, default=None, help='Saving paths to files')
+parser.add_argument('--map', type=str, default=None, help='Path to load map from file')
+parser.add_argument('--run_id', type=str, default=None, help='Identifier to append to saved run folders')
+
 parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
 parser.add_argument('--vis', action='store_true', help='Enable visualization of planning process')
-parser.add_argument('--save', action='store_true', help='Save solved paths to file')
-parser.add_argument('--map', type=str, default=None, help='Path to load map from file')
 
 args = parser.parse_args()
 
-
+#TODO remove copying maps and copy them at the end combining only? 
 def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, maps=None, map_indexes=None):
     """Run planner continuously and store results at specific slot."""
     run_count = 0
@@ -75,9 +75,9 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot=RectangleRobot(0.5,1.0,collision_check_angle_res=8)
 
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.15)
-        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),max_runtime=max_runtime,bounds=(10,10))
+        car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),max_runtime=max_runtime,bounds=(10,10))
 
-        car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(random.uniform(0.1,0.5),random.uniform(0.3,1.0),max_velocity=15),vel_threshold=2,velocity_weight=0,start=(1.5,3.0,0.0),goal=(9.0,7.0,0.0), bounds=(10,10))
+        # car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(random.uniform(0.1,0.5),random.uniform(0.3,1.0),max_velocity=15),vel_threshold=2,velocity_weight=0,start=(1.5,3.0,0.0),goal=(9.0,7.0,0.0), bounds=(10,10))
 
         if args.verbose:
             print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
@@ -149,8 +149,7 @@ def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
     if args.save:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_dir = os.path.join(base_dir, 'data')
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H:%M')
-        save_dir = os.path.join(data_dir, timestamp)
+        save_dir = os.path.join(data_dir, str.join('_', [args.save] + ([args.run_id] if args.run_id else []) ))
         for map_idx in range(n_maps):
             map_folder = os.path.join(save_dir, f"map_{map_idx}")
             os.makedirs(map_folder, exist_ok=True)

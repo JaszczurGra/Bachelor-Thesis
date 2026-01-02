@@ -497,6 +497,8 @@ class PacejkaRectangleRobot(RectangleRobot):
         Fx_f, Fy_f, Fx_r, Fy_r = self.front_tire.forward_front(self, wx) + self.rear_tire.forward_rear(self, wx)
 
 
+        #TODO glowna rzecz  sily przemnozyc przez mu_static 
+
         F_drag = math.copysign(self.Cd0, wx.v_x) +\
             self.Cd1 * wx.v_x +\
             self.Cd2 * wx.v_x * wx.v_x

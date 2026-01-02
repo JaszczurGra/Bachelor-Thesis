@@ -49,7 +49,31 @@ normalize state space for dubins and strrt
 
 
 
-#MAPS
+# MAPS
 one that makes the robot need to rotate as it's rectangle 
 diffrent lenghts for diffrent sized robots 
 diffrent curvature for diffrent length 
+
+
+
+
+
+
+
+
+
+
+# CLUSTER TALK 
+ztestowac auto recznie 
+runowanie: sbatch XXX.sh
+
+zeby wejsc do workera srun --pty /bin/bash
+
+moze dodac memlocka zeby zrownoleglic? 
+
+planning_diffiusion jako srodowisko 
+
+
+tak z pol h mozna zrobic 
+
+48k rdzeni ma cluster  

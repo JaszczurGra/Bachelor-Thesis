@@ -87,7 +87,7 @@ class Pacejka_pathfinding(BasePathfinding):
 
         o_bounds = ob.RealVectorBounds(3)
         #TODO this is refrence omega should the min val be 0 or -max omega for faster slowing down
-
+        #TODO only limit v of x to be always > 0.5 
         o_bounds.setLow(0,-10)
         o_bounds.setHigh(0,10)
         o_bounds.setLow(1,-self.robot.max_velocity / self.robot.R)
