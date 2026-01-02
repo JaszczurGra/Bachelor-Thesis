@@ -11,8 +11,8 @@
 #SBATCH --time=0-0:30:59
 #SBATCH --array=0-4
 
-eval "$(/mnt/storage_3/project_data/pl0467-01/project_data/soft/miniconda3/bin/conda shell.bash hook)"
-conda activate scale_rl
+eval "$(/mnt/storage_6/project_data/pl0467-01/project_data/soft/miniconda3/bin/conda shell.bash hook)"
+conda activate planning_diffusion
 
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
