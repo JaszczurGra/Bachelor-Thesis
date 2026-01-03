@@ -149,7 +149,7 @@ def get_robot(robot_data):
 
 
 class Robot():
-    def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10, bounds = (10,10) ):
+    def __init__(self,radius=0.2,wheelbase=1.0,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10.0, bounds = (10,10) ):
         self.radius = radius
         self.wheelbase = wheelbase
         self.max_velocity = max_velocity
@@ -236,7 +236,7 @@ class Robot():
 
 
 class RectangleRobot(Robot):
-    def __init__(self, width=0.5, lenght=1.0 ,wheelbase=0.7,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10,bounds = (10,10), collision_check_angle_res = 180):
+    def __init__(self, width=0.5, lenght=1.0 ,wheelbase=0.7,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10.0,bounds = (10,10), collision_check_angle_res = 180):
         "collision_check_angle_res : number of angles to check for collision "
         
         super().__init__( 0,wheelbase,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration,bounds)
