@@ -16,4 +16,6 @@ conda activate planning_diffusion
 
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-python src/parallel_generation.py --save "$1" --n 8 --t 240 --r 50 --run_id ${TASK_ID} --map "$2" 
+#dizzy_falcon_001
+
+python src/parallel_generation.py --save "$1" --n 1 --t 20 --r 8 --run_id ${TASK_ID} --map "$2" 

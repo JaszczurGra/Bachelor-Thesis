@@ -13,10 +13,14 @@ if [ -z "$2" ]; then
 fi
 
 
-JOB_ID=$(sbatch --parsable run_parallel_slurm.sh "$1" "$2")
-echo "Submitted array job: $JOB_ID"
+export SLURM_ARRAY_TASK_ID=0
+./run_parallel_slurm.sh "$1" "$2"
+export SLURM_ARRAY_TASK_ID=1
+./run_parallel_slurm.sh "$1" "$2"
 
-POST_JOB_ID=$(sbatch --parsable --dependency=afterok:${JOB_ID} combine.sh "$1")
-echo "Submitted post-processing job: $POST_JOB_ID (waits for $JOB_ID)"
 
-echo "Monitor jobs with: squeue -u $USER"
+
+
+./combine.sh "$1"
+
+

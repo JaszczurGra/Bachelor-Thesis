@@ -13,7 +13,7 @@ class MapGenerator:
         self.cx = self.width / 2
         self.cy = self.height - 1
         
-        self.rx_base = self.width / 2
+        self.rx_base = self.width / 2.5
 
     def _create_arc_layer(self, ry, thickness):
         layer = Image.new('L', (self.width, self.height), 0)
