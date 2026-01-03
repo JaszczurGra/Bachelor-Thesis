@@ -12,7 +12,9 @@ from base_pathfind_classes import BasePathfinding, get_robot
 
       # Use faster backend
 import matplotlib
-matplotlib.use('TkAgg') 
+#TODO uncomment 
+# matplotlib.use('TkAgg') 
+
 
 #TODO check if tkinter exists if not run with base backend and warn user and chane draw idle etc 
 #  LineCollection for drawingpaths 

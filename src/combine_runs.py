@@ -14,8 +14,8 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
 
-    if args.output == '':
-        print("Please provide output folder name using -o")
+    if args.save == '':
+        print("Please provide output folder name using -s")
         exit(1)
     
 
@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
 
     folders = []
-    for output_name in args.output.split(','):
+    for output_name in args.save.split(','):
         folders.extend([x for x in os.listdir('data') if x.startswith(output_name)])
 
     paths = {}

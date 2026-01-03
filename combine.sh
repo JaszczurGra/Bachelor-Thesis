@@ -12,4 +12,4 @@
 #SBATCH --array=0
 
 
-python src/combine_runs.py --save "$1" 
+python src/combine_runs.py --save "$1" -rm 
