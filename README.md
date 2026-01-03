@@ -30,3 +30,10 @@ Create size and turning radius maps
  - s - num of size maps 
  - t - num of turning maps 
  - o - output folder in maps 
+
+
+### Run slurm
+```bash
+./run_combined_slurm.sh --save test_1 -n 8 -t 30 -r 100 --map maps/SlurmTest1/ 
+```
+- normal parameters for paralel_generation + save folder which is used to combine the data 
