@@ -13,7 +13,7 @@ if [ -z "$2" ]; then
 fi
 
 
-JOB_ID=$(sbatch --parsable run_parallel_slurm.sh "$1")
+JOB_ID=$(sbatch --parsable run_parallel_slurm.sh "$1" "$2")
 echo "Submitted array job: $JOB_ID"
 
 POST_JOB_ID=$(sbatch --parsable --dependency=afterok:${JOB_ID} combine.sh "$1")
