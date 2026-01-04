@@ -7,6 +7,8 @@ import random
 import time
 import math
 
+
+
 class MapGenerator:
     def __init__(self, w=300, h=300):
         self.width = w

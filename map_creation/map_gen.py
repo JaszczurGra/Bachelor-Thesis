@@ -11,6 +11,8 @@ parser.add_argument('-o', type=str, default='results', help='Output folder for m
 parser.add_argument('--size', type=int, default=(300,300), nargs=2, help='Map dimensions (not used)')
 
 
+#TODO change map geneatros to base on one class and have them generate save zones based on (start,end, Radius ) * self.width
+
 if __name__ == "__main__":
     args = parser.parse_args()
 

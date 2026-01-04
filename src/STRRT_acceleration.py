@@ -16,12 +16,13 @@ ou.setLogLevel(ou.LOG_NONE)
 #different planners
 
 
-
+#TODO add time cost to the result 
 
 class SSTCarOMPL_acceleration(BasePathfinding):
     def __init__(self,robot=Robot(),map=None,start=(1.0,1.0, 0.0),goal=(9.0,9.0,0.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
         """
         set the velocity weight to 0 to ignore velocity in goal region
+        min_steering angle will be set by calcuations of later force limit 
         """
         super().__init__(robot, map, start, goal,bounds,max_runtime,goal_threshold=pos_treshold) 
         self.propagate_step_size = propagate_step_size
@@ -31,6 +32,8 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         self.velocity_weight = velocity_weight
         self.vel_threshold = vel_threshold
         self.pos_treshold = pos_treshold
+        self.robot.max_steering_at_max_v = min( math.atan(self.robot.wheelbase * self.robot.mu_static * 9.81 / self.robot.max_velocity**2), self.robot.max_steering_at_zero_v) 
+
 
         if selection_radius is None:    
             self.selection_radius = self.robot.max_velocity * self.propagate_step_size * self.control_duration[1] * 2
@@ -54,12 +57,24 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         
         The differential equations (ODE) are integrated over the 'duration' (dt).
         """
-        MAX_DELTA = self.robot.max_steering_at_zero_v -  np.clip(state[3] / self.robot.max_velocity, 0.0, 1.0) * (self.robot.max_steering_at_zero_v - self.robot.max_steering_at_max_v)
-        delta = np.clip(control[1], -MAX_DELTA, MAX_DELTA)
-   
+
+        # F  = mvv/r < C 
+
+        # MAX_DELTA = self.robot.max_steering_at_zero_v -  np.clip(state[3] / self.robot.max_velocity, 0.0, 1.0) * (self.robot.max_steering_at_zero_v - self.robot.max_steering_at_max_v)
+        
+        # R_min = state[3]**2 / (self.robot.mu_static * 9.81) # min turning radius based on lateral friction limit          
+    
+    
+        #TODO optimaze tan and atan computation 
+        MAX_DELTA = self.robot.max_steering_at_zero_v
+        if state [3] >= 0.1:
+            MAX_DELTA = min( math.atan(self.robot.wheelbase * self.robot.mu_static * 9.81 / state[3]**2), self.robot.max_steering_at_zero_v) 
+
+
+
         result[0] =  state[3] * math.cos(state[2])  
         result[1] = state[3] * math.sin(state[2])  
-        result[2] = (state[3] / self.robot.wheelbase) * math.tan(delta) 
+        result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
         result[3] = control[0]
 
     def solve(self):
@@ -158,7 +173,7 @@ if __name__ == "__main__":
     ou.setLogLevel(ou.LOG_DEBUG) 
     map = np.ones((100,100))
     map[40:,20:50] = 0    
-    car_planner = SSTCarOMPL_acceleration(max_runtime=30, map=map,robot =RectangleRobot(0.5,1.0,max_velocity=5),vel_threshold=0.5,velocity_weight=0.2)
+    car_planner = SSTCarOMPL_acceleration(max_runtime=120, map=map,robot =RectangleRobot(0.5,1.0,max_velocity=10,mu_static=10),vel_threshold=0.5,velocity_weight=0.2)
     print(car_planner.solve())
     car_planner.visualize()
 

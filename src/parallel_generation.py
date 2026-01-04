@@ -1,4 +1,3 @@
-import io
 import os
 from RRT_acceleration import CarOMPL_acceleration
 from STRRT_acceleration import SSTCarOMPL_acceleration
@@ -11,10 +10,9 @@ from multiprocessing import Pool, cpu_count,Manager
 from base_pathfind_classes import Robot,RectangleRobot
 import argparse
 import random
-from datetime import datetime
 import json
 
-from visualizer import Visualizer
+
 
 from PIL import Image
 import numpy as np
@@ -72,14 +70,20 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         # robot.max_steering_at_zero_v = 0
         # robot.max_steering_at_max_v = 0
         
-        robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=90)
+        robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=60)
         robot.wheelbase = robot.lenght 
         robot.max_velocity = random.uniform(5.0,15.0)
         robot.acceleration = random.uniform(3.0,10.0)
+        robot.mu_static = random.uniform(0.5,7.0)
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
-        robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 16.0)
-        # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(2.0,2.0,1),goal=(8.0,2.0,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.15)
-        car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),max_runtime=max_runtime,bounds=(15,15))
+        # robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 16.0)
+        
+
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0,bounds=(15,15))
+        
+        
+        
+        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,-math.pi),max_runtime=max_runtime,bounds=(15,15))
 
         # car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(random.uniform(0.1,0.5),random.uniform(0.3,1.0),max_velocity=15),vel_threshold=2,velocity_weight=0,start=(1.5,3.0,0.0),goal=(9.0,7.0,0.0), bounds=(10,10))
 
@@ -168,6 +172,7 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     num_threads = min(num_threads, cpu_count() - 1) 
     
     if args.vis:
+        from visualizer import Visualizer
         vis = Visualizer(num_threads)  
     
 

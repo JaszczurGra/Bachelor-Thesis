@@ -77,3 +77,11 @@ planning_diffiusion jako srodowisko
 tak z pol h mozna zrobic 
 
 48k rdzeni ma cluster  
+
+
+
+
+
+
+
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKXg8cj+SCvLItVBH7p3m5rt38LLc9zu0dZgom0anLFE julian.mikolajczak@student.put.poznan.pl

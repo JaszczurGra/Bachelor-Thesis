@@ -5,6 +5,7 @@ import os
 import random
 import time
 
+R = 2.5 / 15
 class MapGenerator:
     def __init__(self, w=300, h=300):
         self.width = w
@@ -13,7 +14,7 @@ class MapGenerator:
         self.cx = self.width / 2
         self.cy = self.height - 1
         
-        self.rx_base = self.width / 2.5
+        self.rx_base = self.width / 2
 
     def _create_arc_layer(self, ry, thickness):
         layer = Image.new('L', (self.width, self.height), 0)
@@ -39,6 +40,15 @@ class MapGenerator:
         
         return np.array(layer)
 
+    def _create_save_zone_layers(self, radius):
+        layer = Image.new('L', (self.width, self.height), 0)
+        draw = ImageDraw.Draw(layer)
+        
+        draw.ellipse([-radius, self.height - radius, radius, self.height+radius], fill=255)
+        draw.ellipse([self.width - radius, self.height - radius, self.width+radius, self.height+radius], fill=255)
+        
+        return np.array(layer)
+
     def generate_map(self):
         final_grid = np.zeros((self.height, self.width), dtype=np.uint8)
 
@@ -60,10 +70,13 @@ class MapGenerator:
         h3 = random.randint(230, 260)
         w3 = random.randint(30, 50)
         layer3 = self._create_arc_layer(ry=h3, thickness=w3)
+        
+        save_zones = self._create_save_zone_layers(radius=R*self.width)
 
         final_grid = np.maximum(final_grid, layer1)
         final_grid = np.maximum(final_grid, layer2)
         final_grid = np.maximum(final_grid, layer3)
+        final_grid = np.maximum(final_grid, save_zones)
 
         return final_grid
 
