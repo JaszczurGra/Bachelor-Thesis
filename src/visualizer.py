@@ -142,9 +142,11 @@ if __name__ == "__main__":
 
             planner_data = data['planner']
             robot = get_robot(data['robot'])
+
             if robot and hasattr(robot, 'collision_check_angle_res'):
+                collision_check = robot.collision_check_angle_res 
                 #Disabling the multiple dilated map generation
-                robot.collision_check_angle_res = 1
+                robot.collision_check_angle_res = 0
             planner_data['robot'] = robot
             #TODO add diffrent planners data implementatin finding class 
 
@@ -152,6 +154,9 @@ if __name__ == "__main__":
             planner = BasePathfinding(map=map_array, **filtered_params)
             planner.solved_path = data['path']
 
+            if robot and hasattr(robot, 'collision_check_angle_res'):
+                #Disabling the multiple dilated map generation
+                robot.collision_check_angle_res = collision_check
 
             all_results.append({
                 'planner': planner,
