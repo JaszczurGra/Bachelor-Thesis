@@ -124,9 +124,9 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         #TODO tune resolution  5 checks per length of body of robot implemt this for circular robot 
         #TODO is this per bounds as it's has to be between 0 and 1 
         #TODO maybe base this on the size of the map as it wont get better when the map is small 
-        si.setStateValidityCheckingResolution(min (self.robot.width, self.robot.length) * 0.005 / max ( self.bounds[0] , self.bounds[1]) )
-        # si.setStateValidityCheckingResolution(0.001 )
-
+     
+        si.setStateValidityCheckingResolution(min (self.robot.width, self.robot.length) * 0.2 / max ( self.bounds[0] , self.bounds[1])  if isinstance(self.robot, RectangleRobot) else self.robot.radius * 0.2 / max ( self.bounds[0] , self.bounds[1]) )
+  
         #TODO tune adaptive ode solver
         ode = oc.ODE(self.propagate)
         odeSolver = oc.ODEBasicSolver(si, ode)
@@ -179,12 +179,14 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    map = np.ones((400,400))
+    map = np.ones((50,50))
     map[0,0] = 0
-    map[80:,80:240] = 0    
-    robot =RectangleRobot(0.5,1.0,max_velocity=10,mu_static=2,collision_check_angle_res=30)
-    robot = Robot()
-    car_planner = SSTCarOMPL_acceleration(max_runtime=15, map=map,robot =robot,vel_threshold=200,bounds=(15,15))
+    map[10:,10:30] = 0    
+    map[10:13,:40] = 0
+    np.set_printoptions(threshold=np.inf,linewidth=200)
+    robot =RectangleRobot(0.5,1.0,max_velocity=10,mu_static=2,collision_check_angle_res=180)
+
+    car_planner = SSTCarOMPL_acceleration(max_runtime=50, map=map,robot =robot,vel_threshold=0.3,bounds=(15,15),goal=(10,10,0),start=(1.5,1.5,0))
     print('Solved', car_planner.solve())
     print('Max velocity:', car_planner.visualize() , '/', car_planner.robot.max_velocity)
     print('Time taken by path:', car_planner.solved_time)

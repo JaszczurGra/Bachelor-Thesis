@@ -63,12 +63,12 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot.wheelbase = robot.length 
         robot.max_velocity = random.uniform(5.0,15.0)
         robot.acceleration = random.uniform(3.0,10.0)
-        robot.mu_static = random.uniform(0.5,7.0)
-        robot.mu_static = random.uniform(1,15) # TODO high friction for testing
+        robot.mu_static = random.uniform(0.5,8.0)
+        # robot.mu_static = random.uniform(1,15) # TODO high friction for testing
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
 
 
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=2,bounds=(15,15))
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))
         
         
         

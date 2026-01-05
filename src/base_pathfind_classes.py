@@ -18,7 +18,7 @@ class BasePathfinding():
         self.solved_path = None 
         self.map = map 
         self.robot = robot if robot is not None else Robot()
-        self.robot.set_map(map)
+        self.robot.set_map(map,bounds)
         self.start = start
         self.goal = goal
         self.bounds = bounds
@@ -163,14 +163,16 @@ class Robot():
         self._bounds = bounds
 
 
-    def set_map(self, map):
+    def set_map(self, map, bounds):
         if map is None:
             return
+        self._bounds = bounds
         radius_px = int((self.radius / self._bounds[0]) * map.shape[0])
         y, x = np.ogrid[-radius_px:radius_px+1, -radius_px:radius_px+1]
         circle = x**2 + y**2 <= radius_px**2
         dilated = binary_dilation(map == 0, structure=circle)
         self._dilated_map = [dilated]
+
 
 
 
@@ -186,9 +188,8 @@ class Robot():
             return True
         x, y = state[0][0], state[0][1]
 
-        px = int((x / self._bounds[0]) * self._dilated_map[a].shape[1])
-        py = int((y / self._bounds[1]) * self._dilated_map[a].shape[0])
-        
+        px = int(x / self._bounds[0] * self._dilated_map[a].shape[1])
+        py = int(y / self._bounds[1] * self._dilated_map[a].shape[0])
         if 0 <= px < self._dilated_map[a].shape[1] and 0 <= py < self._dilated_map[a].shape[0]:
             # np.set_printoptions(threshold=np.inf, linewidth=np.inf)
             return self._dilated_map[a][py, px]
@@ -264,12 +265,11 @@ class RectangleRobot(Robot):
         w  = self.width /2.0 * abs(math.sin(angle)) + self.length /2.0 * abs( math.cos(angle))
         return w <= x <= self._bounds[0] - w  and   h <= y <= self._bounds[1] - self.radius
 
-        return super().check_bounds(state)
-
-    def set_map(self, map):
+    def set_map(self, map,bounds):
 
         if map is None:
             return
+        self._bounds = bounds
         diagonal = math.sqrt((self.width/2.0)**2 + (self.length/2.0)**2)
         radius_px = int((diagonal / self._bounds[0]) * map.shape[0])
 
@@ -297,7 +297,7 @@ class RectangleRobot(Robot):
 
         # self.radius = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
         self.radius = 0  
-        print(f'Set {self.collision_check_angle_res} dilated maps for rectangle robot collision checking.')
+        # print(f'Set {self.collision_check_angle_res} dilated maps for rectangle robot collision checking.')
 
     def draw(self, ax, state):
         super().draw(ax, state)
