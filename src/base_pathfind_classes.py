@@ -24,6 +24,8 @@ class BasePathfinding():
         self.bounds = bounds
         self.max_runtime = max_runtime
         self.goal_threshold = goal_threshold
+        self.solved_time = None 
+
 
     def print_info(self):
         data = {'class':self.__class__.__name__} | {
@@ -77,7 +79,7 @@ class BasePathfinding():
 
 
         # ax.plot(self.start_point[0], self.start_point[1], '*', color='red', markersize=15, label='Start Center')
-
+        #Plot max velocity at end goal 
         ax.plot(self.goal[0], self.goal[1], 'x', color='blue', markersize=8, label='Goal Center')
         if self.goal_threshold > 0:
             ax.add_patch(plt.Circle(self.goal, self.goal_threshold, color='blue', alpha=0.2, label='Goal Region'))
@@ -180,13 +182,15 @@ class Robot():
 
     def check_collision(self, state, a=0):
         if self._dilated_map is None:
-            return False
+            print('Dialtation map not set ')
+            return True
         x, y = state[0][0], state[0][1]
 
         px = int((x / self._bounds[0]) * self._dilated_map[a].shape[1])
         py = int((y / self._bounds[1]) * self._dilated_map[a].shape[0])
         
         if 0 <= px < self._dilated_map[a].shape[1] and 0 <= py < self._dilated_map[a].shape[0]:
+            # np.set_printoptions(threshold=np.inf, linewidth=np.inf)
             return self._dilated_map[a][py, px]
         return True
     
@@ -236,17 +240,19 @@ class Robot():
 
 
 class RectangleRobot(Robot):
-    def __init__(self, width=0.5, lenght=1.0 ,wheelbase=0.7,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10.0,bounds = (10,10), collision_check_angle_res = 180,mu_static=1.0):
+    def __init__(self, width=0.5, length=1.0 ,wheelbase=0.7,max_velocity=15.0,max_steering_at_zero_v=math.pi / 4.0,max_steering_at_max_v=math.pi / 16.0, acceleration=10.0,bounds = (10,10), collision_check_angle_res = 180,mu_static=1.0):
         "collision_check_angle_res : number of angles to check for collision "
         
         super().__init__( 0,wheelbase,max_velocity,max_steering_at_zero_v,max_steering_at_max_v,acceleration,bounds,mu_static)
         self.width = width
-        self.lenght = lenght
+        self.length = length
         self.collision_check_angle_res = collision_check_angle_res
 
     def check_collision(self, state):
+        #TODO do only second and make adiffrent robot for dubins
+        #TODO we could check 2 nearest ones if it's valid and that it has to be valid in both
         angle =  state[1].value if hasattr(state[1], 'value') else state[0][2]
-        angle_index = int((angle %  math.pi) / (math.pi) * self.collision_check_angle_res) % self.collision_check_angle_res
+        angle_index = int(angle * self.collision_check_angle_res / math.pi) % self.collision_check_angle_res
         return super().check_collision(state,angle_index)
 
     def check_bounds(self, state):
@@ -254,8 +260,8 @@ class RectangleRobot(Robot):
         angle =  state[1].value if hasattr(state[1], 'value') else state[0][2]
         x = state[0][0]
         y = state[0][1]
-        h  = self.width /2.0 * abs(math.cos(angle)) + self.lenght /2.0 * abs( math.sin(angle))
-        w  = self.width /2.0 * abs(math.sin(angle)) + self.lenght /2.0 * abs( math.cos(angle))
+        h  = self.width /2.0 * abs(math.cos(angle)) + self.length /2.0 * abs( math.sin(angle))
+        w  = self.width /2.0 * abs(math.sin(angle)) + self.length /2.0 * abs( math.cos(angle))
         return w <= x <= self._bounds[0] - w  and   h <= y <= self._bounds[1] - self.radius
 
         return super().check_bounds(state)
@@ -264,15 +270,16 @@ class RectangleRobot(Robot):
 
         if map is None:
             return
-        diagonal = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
+        diagonal = math.sqrt((self.width/2.0)**2 + (self.length/2.0)**2)
         radius_px = int((diagonal / self._bounds[0]) * map.shape[0])
 
 
         rect_width_px = int((self.width / self._bounds[0]) * map.shape[0])
-        rect_lenght_px = int((self.lenght / self._bounds[0]) * map.shape[0])
+        rect_lenght_px = int((self.length / self._bounds[0]) * map.shape[0])
         self._dilated_map = []
 
         for i in range(self.collision_check_angle_res):
+            #TODO is this rotaing to the right? as it rotates the map ?  ??
             angle = (math.pi / self.collision_check_angle_res) * i
             
             y_grid, x_grid = np.ogrid[-radius_px:radius_px+1, -radius_px:radius_px+1]
@@ -284,14 +291,17 @@ class RectangleRobot(Robot):
             
 
             rect_mask = (np.abs(x_rot) <= rect_width_px) & (np.abs(y_rot) <= rect_lenght_px)
+            # np.set_printoptions(threshold=np.inf, linewidth=np.inf)
+            # print(rect_mask.astype(int),end='\n\n\n')        
             self._dilated_map.append(binary_dilation(map == 0, structure=rect_mask))
 
         # self.radius = math.sqrt((self.width/2.0)**2 + (self.lenght/2.0)**2)
-        self.radius = 0 
+        self.radius = 0  
+        print(f'Set {self.collision_check_angle_res} dilated maps for rectangle robot collision checking.')
 
     def draw(self, ax, state):
         super().draw(ax, state)
-        rect = plt.Rectangle((state[0] - self.lenght / 2.0,   state[1] - self.width / 2.0), self.lenght, self.width, angle=math.degrees(state[2]), color='green', alpha=0.5,rotation_point='center')
+        rect = plt.Rectangle((state[0] - self.length / 2.0,   state[1] - self.width / 2.0), self.length, self.width, angle=math.degrees(state[2]), color='green', alpha=0.5,rotation_point='center')
         ax.add_patch(rect)
 
 
@@ -547,10 +557,12 @@ class KinematicGoalRegion(ob.Goal):
         return  math.sqrt((state[0][0] - self.goal_state_[0])**2 + (state[0][1] - self.goal_state_[1])**2)
     
 class KinematicGoalRegionWithVelocity(KinematicGoalRegion):
-    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=3.0,velocity_weight=0.01,bounds=(10,10),max_velocity=15.0):
+    def __init__(self, si, goal_state, pos_threshold=0.5,velocity_threshold=0.5,bounds=(10,10),max_velocity=15.0):
+        '''pos_threshold and velocity threshold absolute (not scaled by bounds and max_vel)'''
         super().__init__(si, goal_state, pos_threshold)
         self.vel_threshold = velocity_threshold 
-        self.velocity_weight = velocity_weight * (bounds[1]**2 + bounds[0]**2) / max_velocity  # Normalize weight based on  max velocity and scale to postion bounds 
+        # self.velocity_weight =   pos_threshold /  (bounds[1]**2 + bounds[0]**2) * max_velocity / velocity_threshold    * (bounds[1]**2 + bounds[0]**2) / max_velocity  # Normalize weight based on  max velocity and scale to postion bounds 
+        self.velocity_weight = pos_threshold / velocity_threshold
         #bounds are added here to normalize the position 
 
     #TODO is not sqrt the pos and vel dist workign properl y

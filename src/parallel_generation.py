@@ -20,85 +20,73 @@ import math
 
 
 #TODO should the structure be map and paths or link to map 
+#TODO remove copying maps and copy them at the end combining only? 
 
 
 #TODO bounds automatic by scale of img 
-#TODO should the velocity weight be 1 or smaller 
+
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
 parser.add_argument('-r', '--runs_per_planner', type=int, default=5, help='Number of runs per planner')
 parser.add_argument('-t', '--max_runtime', type=float, default=3.0, help='Maximum runtime per planner run (seconds)')
 parser.add_argument('--save', type=str, default=None, help='Saving paths to files')
 parser.add_argument('--map', type=str, default=None, help='Path to load map from file')
-parser.add_argument('--run_id', type=str, default=None, help='Identifier to append to saved run folders')
+parser.add_argument('--run_id', type=int, default=None, help='Identifier to append to saved run folders')
 
 parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
 parser.add_argument('--vis', action='store_true', help='Enable visualization of planning process')
 
 args = parser.parse_args()
 
-#TODO remove copying maps and copy them at the end combining only? 
+#TODO cleanup for not updating vis just saving when finished if no vis 
+
 def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, maps=None, map_indexes=None):
     """Run planner continuously and store results at specific slot."""
     run_count = 0
     
+    #prop not neccesary 
+    if maps is None or map_indexes is None or len(map_indexes) <= planner_id:
+        print(f"[Planner {planner_id}] No maps provided, exiting.")
+        return
+
     while run_count < runs_per_planner and not stop_event.is_set():
 
         start_time = time.time()
         
 
-        if maps is not None and map_indexes is not None:
+        if map_indexes[planner_id][run_count] < len(maps):
             map_data = maps[map_indexes[planner_id][run_count]]
         else:
-            map_data = np.ones((50,50))
-        # obstacles = [RectangleObstacle(random.uniform(0,10), random.uniform(0,10), random.uniform(0.5,2), random.uniform(0.5,2)) for i in range(random.randint(5,9))]
- 
-        # robot = RectangleRobot( )
-        # robot.width = random.uniform(0.01,0.5)
-        # robot.lenght = random.uniform(0.01,0.5) 
+            continue
 
-        # robot.width = 1
-        # robot.lenght = 1
-
-
-        # robot.radius = random.uniform(0.2,0.6)
-        # robot.wheelbase = robot.lenght * 0.5
-        # robot.max_velocity = 5.0 + random.uniform(-1.0,1.0)
-        # robot.acceleration = 4
-        # robot.max_steering_at_zero_v = random.uniform(math.pi / 10.0, math.pi / 6.0)
-        # robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 12.0)
-        # robot.max_steering_at_zero_v = 0
-        # robot.max_steering_at_max_v = 0
-        
-        robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=60)
-        robot.wheelbase = robot.lenght 
+        robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=180)
+        robot.wheelbase = robot.length 
         robot.max_velocity = random.uniform(5.0,15.0)
         robot.acceleration = random.uniform(3.0,10.0)
         robot.mu_static = random.uniform(0.5,7.0)
+        robot.mu_static = random.uniform(1,15) # TODO high friction for testing
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
-        # robot.max_steering_at_max_v = random.uniform(math.pi / 20.0, math.pi / 16.0)
-        
 
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0,bounds=(15,15))
+
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=2,bounds=(15,15))
         
         
         
         # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,-math.pi),max_runtime=max_runtime,bounds=(15,15))
 
         # car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(random.uniform(0.1,0.5),random.uniform(0.3,1.0),max_velocity=15),vel_threshold=2,velocity_weight=0,start=(1.5,3.0,0.0),goal=(9.0,7.0,0.0), bounds=(10,10))
-
-        if args.verbose:
-            print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
         # car_planner = STRRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime, selection_radius= 1.5, pruning_radius=0.1)
-            print(f"Car planner params: {car_planner.print_info()}")
         # car_planner = RRT_Planer(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
+
+        if args.verbose:
+            print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
+            print(f"Car planner params: {car_planner.print_info()}")
         solved = car_planner.solve()
 
         if args.verbose:
             print(f"[Planner {planner_id}] Run #{run_count+1} finished in {time.time() - start_time:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")
-        # print(f"[Planner {planner_id}] Run #{run_count} finished in {elapsed:.2f}s. Success: {'Exact' if solved else 'Approximate' if solved is not None else 'No solution'}")
         
         if solved is not None: 
         # Store result at this planner's slot
@@ -144,27 +132,36 @@ def save_to_file(planner, save_dir,thread,run, map_index):
 def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
     n_maps = len(maps_png)
     n_runs = num_threads * runs_per_planner
-    base_runs_per_map = n_runs // n_maps
     map_indexes = [[] for _ in range(num_threads)]    
-    current_map =  0 
-    for i in range(n_runs):
-        map_indexes[i %num_threads] += [current_map]
-        if (i+1) % base_runs_per_map == 0: 
-            current_map += 1 
-        if current_map >= n_maps:
-            current_map = 0
+    if args.run_id is not None or n_runs <= n_maps:
+        # change this to generate as it did with base_runs_per_map so that least folders will be generated 
+        offset = args.run_id * n_runs 
+        for i in range(n_runs):
+            map_indexes[i %num_threads] += [(offset + i) % n_maps]
+    else:
+        base_runs_per_map = n_runs // n_maps
+        current_map =  0 
+        for i in range(n_runs):
+            map_indexes[i %num_threads] += [current_map]
+            if (i+1) % base_runs_per_map == 0: 
+                current_map += 1 
+            if current_map >= n_maps:
+                current_map = 0
+        print(f'Each map will be used approximately {base_runs_per_map} times.')
+        
+
 
     if args.save:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_dir = os.path.join(base_dir, 'data')
         save_dir = os.path.join(data_dir, str.join('_', [args.save] + ([args.run_id] if args.run_id else []) ))
+        #TODO don't generate all folders just the ones that are needed 
         for map_idx in range(n_maps):
             map_folder = os.path.join(save_dir, f"map_{map_idx}")
             os.makedirs(map_folder, exist_ok=True)
             maps_png[map_idx].save(os.path.join(map_folder, 'map.png'))
 
 
-    print(f'Each map will be used approximately {base_runs_per_map} times.')
     return map_indexes,save_dir if args.save else None
 
 

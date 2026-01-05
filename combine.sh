@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=MotionPlanningDatasetgenCombining
+#SBATCH --job-name=MP_combine_dataset
 #SBATCH --output=log/%j.out
 #SBATCH --error=log/%j.err
 #SBATCH --partition=standard

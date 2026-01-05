@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=MotionPlanningDatasetgen
+#SBATCH --job-name=MP_worker_dataset
 #SBATCH --output=log/%j.out
 #SBATCH --error=log/%j.err
 #SBATCH --partition=standard

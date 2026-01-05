@@ -17,9 +17,8 @@ ou.setLogLevel(ou.LOG_NONE)
 
 
 #TODO add time cost to the result 
-
 class SSTCarOMPL_acceleration(BasePathfinding):
-    def __init__(self,robot=Robot(),map=None,start=(1.0,1.0, 0.0),goal=(9.0,9.0,0.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, velocity_weight=0.0, vel_threshold=4.0, pos_treshold=0.5):
+    def __init__(self,robot=RectangleRobot(),map=None,start=(1.0,1.0, 0.0),goal=(9.0,9.0,0.0), bounds=(0,10,0,10),max_runtime=30.0, propagate_step_size=0.02, control_duration=(1,10), selection_radius=None, pruning_radius=None, vel_threshold=None, pos_treshold=0.5):
         """
         set the velocity weight to 0 to ignore velocity in goal region
         min_steering angle will be set by calcuations of later force limit 
@@ -29,11 +28,9 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         self.control_duration = control_duration  # (min_steps, max_steps)
         self.pruning_radius = pruning_radius
         self.selection_radius = selection_radius
-        self.velocity_weight = velocity_weight
         self.vel_threshold = vel_threshold
         self.pos_treshold = pos_treshold
         self.robot.max_steering_at_max_v = min( math.atan(self.robot.wheelbase * self.robot.mu_static * 9.81 / self.robot.max_velocity**2), self.robot.max_steering_at_zero_v) 
-
 
         if selection_radius is None:    
             self.selection_radius = self.robot.max_velocity * self.propagate_step_size * self.control_duration[1] * 2
@@ -41,6 +38,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
             self.pruning_radius = self.robot.max_velocity * self.propagate_step_size * self.control_duration[1] * 0.5
         #TODO pruning and selection radius adaptive to robot max velocity * propagate step size * control_duration 
 
+        self._debug_counter = 0 
 
 
 
@@ -66,12 +64,15 @@ class SSTCarOMPL_acceleration(BasePathfinding):
     
     
         #TODO optimaze tan and atan computation 
+        #TODO g is constant 
         MAX_DELTA = self.robot.max_steering_at_zero_v
+
         if state [3] >= 0.1:
             MAX_DELTA = min( math.atan(self.robot.wheelbase * self.robot.mu_static * 9.81 / state[3]**2), self.robot.max_steering_at_zero_v) 
 
-
-
+        # self._debug_counter += 1
+        # if self._debug_counter % 100000 == 0:
+        #     print(self._debug_counter / 1000000 , 'MIL propagation steps')
         result[0] =  state[3] * math.cos(state[2])  
         result[1] = state[3] * math.sin(state[2])  
         result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
@@ -82,7 +83,8 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
         pos_bounds = ob.RealVectorBounds(2)
         pos_bounds.setLow(0.0)
-        pos_bounds.setHigh(self.bounds[1])
+        pos_bounds.setHigh(0, self.bounds[0])
+        pos_bounds.setHigh(1, self.bounds[1])
         r2 = ob.RealVectorStateSpace(2)
         r2.setBounds(pos_bounds)
 
@@ -119,12 +121,17 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
         validity_checker = ob.StateValidityCheckerFn(partial(self.is_state_valid, si))
         si.setStateValidityChecker(validity_checker)
-        si.setStateValidityCheckingResolution(0.3)
+        #TODO tune resolution  5 checks per length of body of robot implemt this for circular robot 
+        #TODO is this per bounds as it's has to be between 0 and 1 
+        #TODO maybe base this on the size of the map as it wont get better when the map is small 
+        si.setStateValidityCheckingResolution(min (self.robot.width, self.robot.length) * 0.005 / max ( self.bounds[0] , self.bounds[1]) )
+        # si.setStateValidityCheckingResolution(0.001 )
 
-        #TODO add adaptive ode solver
+        #TODO tune adaptive ode solver
         ode = oc.ODE(self.propagate)
         odeSolver = oc.ODEBasicSolver(si, ode)
-        odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
+        #changes the step size adaptively based on estimated error 
+        # odeSolver = oc.ODEAdaptiveSolver(si, ode,0.01)
 
         propagator = oc.ODESolver.getStatePropagator(odeSolver)
         si.setStatePropagator(propagator)
@@ -143,8 +150,8 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         goal()[1].value, goal()[2][0] = (self.goal[2], 0.0)
 
         goal_region = KinematicGoalRegion(si, goal, pos_threshold=self.pos_treshold)
-        if self.velocity_weight > 0:
-            goal_region = KinematicGoalRegionWithVelocity(si, goal, pos_threshold=self.pos_treshold,velocity_threshold=self.vel_threshold,velocity_weight=self.velocity_weight,bounds=self.bounds,max_velocity=self.robot.max_velocity) 
+        if self.vel_threshold is not None :
+            goal_region = KinematicGoalRegionWithVelocity(si, goal, pos_threshold=self.pos_treshold,velocity_threshold=self.vel_threshold,bounds=self.bounds,max_velocity=self.robot.max_velocity) 
         pdef.setStartAndGoalStates (start,goal)
         pdef.setGoal(goal_region)
 
@@ -161,19 +168,24 @@ class SSTCarOMPL_acceleration(BasePathfinding):
 
         solved = planner.solve(self.max_runtime)
         if solved:
-            pdef.getSolutionPath().interpolate()
-            # pdef.getSolutionPath().setResolution(0.001)
-            # pdef.getSolutionPath().interpolate()
-            self.solved_path = pdef.getSolutionPath().printAsMatrix()
+            path = pdef.getSolutionPath()
+            path.interpolate()
+            self.solved_path = path.printAsMatrix()
+            self.solved_time = path.getControlDuration(0) * path.getControlCount()
             return pdef.hasExactSolution()
         return None
 
 
+
 if __name__ == "__main__": 
     ou.setLogLevel(ou.LOG_DEBUG) 
-    map = np.ones((100,100))
-    map[40:,20:50] = 0    
-    car_planner = SSTCarOMPL_acceleration(max_runtime=120, map=map,robot =RectangleRobot(0.5,1.0,max_velocity=10,mu_static=10),vel_threshold=0.5,velocity_weight=0.2)
-    print(car_planner.solve())
-    car_planner.visualize()
+    map = np.ones((400,400))
+    map[0,0] = 0
+    map[80:,80:240] = 0    
+    robot =RectangleRobot(0.5,1.0,max_velocity=10,mu_static=2,collision_check_angle_res=30)
+    robot = Robot()
+    car_planner = SSTCarOMPL_acceleration(max_runtime=15, map=map,robot =robot,vel_threshold=200,bounds=(15,15))
+    print('Solved', car_planner.solve())
+    print('Max velocity:', car_planner.visualize() , '/', car_planner.robot.max_velocity)
+    print('Time taken by path:', car_planner.solved_time)
 

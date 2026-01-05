@@ -48,12 +48,12 @@ if __name__ == "__main__":
     
 
 
-    adjectives = ["dizzy", "zippy", "bouncy", "quirky", "snappy", "jazzy", "peppy", "zesty", "spicy", "witty"]
-    animals = ["falcon", "mongoose", "penguin", "otter", "badger", "porcupine", "lemur", "ferret", "quail", "lynx"]
+    # adjectives = ["dizzy", "zippy", "bouncy", "quirky", "snappy", "jazzy", "peppy", "zesty", "spicy", "witty"]
+    # animals = ["falcon", "mongoose", "penguin", "otter", "badger", "porcupine", "lemur", "ferret", "quail", "lynx"]
 
-    funny_name = f"{random.choice(adjectives)}_{random.choice(animals)}"
-    output_name = f"{funny_name}_{timestamp}"
-
+    # funny_name = f"{random.choice(adjectives)}_{random.choice(animals)}"
+    # output_name = f"{funny_name}_{timestamp}"
+    output_name = f"{args.save}_{timestamp}"
 
     output_folder = os.path.join('data', output_name)
     os.makedirs(output_folder, exist_ok=True)
