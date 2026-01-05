@@ -13,7 +13,7 @@ class MapGenerator:
         self.wall_thickness =  int ( wall_thickness * w)
         self.mid_y = h // 2
         
-        self.divider_gap = 40
+        self.divider_gap = self.random_scaled_h(40/300, 60/300)
 
     def random_scaled_h(self, l, h ):
         return random.randint(int(l * self.height), int(h * self.height))
@@ -50,8 +50,8 @@ class MapGenerator:
         grid = np.ones((self.width, self.height), dtype=np.uint8)
 
 
-        div_start_y = self.mid_y - (self.wall_thickness // 2)
-        div_end_y   = self.mid_y + (self.wall_thickness // 2)
+        div_start_y = self.mid_y - int(self.wall_thickness * (1 + random.random() )  )
+        div_end_y   = self.mid_y + int(self.wall_thickness * (1 + random.random() )  )
         
         grid[div_start_y:div_end_y, self.divider_gap : -self.divider_gap] = 0
 

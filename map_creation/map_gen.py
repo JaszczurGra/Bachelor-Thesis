@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     size_gen = SizeMapGen(args.size[0],args.size[1])
     turn_gen = TurnMapGen(args.size[0],args.size[1])
-    noise_gen = NoiseMapGen(args.size[0],args.size[1])
+    noise_gen = NoiseMapGen(int(args.size[0] * 1.5),int(args.size[1] * 1.5))
 
     print(f"Generating {args.s} size maps...")
     for i in range(args.s):
