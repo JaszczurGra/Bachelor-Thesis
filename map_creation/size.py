@@ -5,7 +5,8 @@ import os
 import random
 import time
 
-R = 2.5 / 15
+R = 2.5 * 1.41 / 15
+VERTICAL_OFFSET = 1.5 / 15 
 class MapGenerator:
     def __init__(self, w=300, h=300):
         self.width = w
@@ -49,26 +50,31 @@ class MapGenerator:
         
         return np.array(layer)
 
+    def random_scaled_h(self, l, h ):
+        return random.randint(int(l * self.height), int(h * self.height))
+
     def generate_map(self):
+
+        offset =  int(VERTICAL_OFFSET * self.height)
         final_grid = np.zeros((self.height, self.width), dtype=np.uint8)
 
         # Bottom line
-        line_h = random.randint(5, 10)
+        line_h = self.random_scaled_h(5/300,8/300)
         final_grid[self.height - line_h : self.height, :] = 255
 
         # Arc 1
-        h1 = random.randint(45, 65)
-        w1 = random.randint(10, 15)
+        h1 = self.random_scaled_h(45/300, 65/300)
+        w1 = self.random_scaled_h(10/300, 15/300)
         layer1 = self._create_arc_layer(ry=h1, thickness=w1)
         
         # Arc 2
-        h2 = random.randint(130, 160)
-        w2 = random.randint(15, 25)
+        h2 = self.random_scaled_h(130/300, 160/300)
+        w2 = self.random_scaled_h(15/300, 25/300)
         layer2 = self._create_arc_layer(ry=h2, thickness=w2)
         
         # Arc 3
-        h3 = random.randint(230, 260)
-        w3 = random.randint(30, 50)
+        h3 = self.random_scaled_h(230/300, 260/300)
+        w3 = self.random_scaled_h(30/300, 50/300)
         layer3 = self._create_arc_layer(ry=h3, thickness=w3)
         
         save_zones = self._create_save_zone_layers(radius=R*self.width)
@@ -76,6 +82,9 @@ class MapGenerator:
         final_grid = np.maximum(final_grid, layer1)
         final_grid = np.maximum(final_grid, layer2)
         final_grid = np.maximum(final_grid, layer3)
+
+        final_grid = np.concatenate([final_grid[offset:, :], np.zeros((offset, self.width), dtype=np.uint8)], axis=0)
+
         final_grid = np.maximum(final_grid, save_zones)
 
         return final_grid
@@ -88,7 +97,7 @@ class MapGenerator:
         print(f"Saved {filename}")
 
 if __name__ == "__main__":
-    gen = MapGenerator(300,300)
+    gen = MapGenerator(1300,1300)
     
     print(f"Previewing car width maps...")
     

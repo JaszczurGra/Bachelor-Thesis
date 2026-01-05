@@ -8,7 +8,7 @@ import time
 import math
 
 
-
+R = 2.5 * 1.41 / 15
 class MapGenerator:
     def __init__(self, w=300, h=300):
         self.width = w
@@ -16,6 +16,12 @@ class MapGenerator:
         
         self.start_pos = (0, self.height - 1)
         self.stop_pos = (self.width - 1, self.height - 1)
+
+    def random_scaled_h(self, l, h ):
+        return random.randint(int(l * self.height), int(h * self.height))
+    def random_scaled_w(self, l, h ):
+        return random.randint(int(l * self.width), int(h * self.width))
+
 
     def _dist_point_to_rect(self, px, py, rx, ry, rw, rh):
         closest_x = max(rx, min(px, rx + rw))
@@ -30,19 +36,19 @@ class MapGenerator:
     # Change parameters here
     def generate_map(self, 
                      coverage_percent=0.2, 
-                     min_rect_size=40, 
-                     max_rect_size=60,
+                     min_rect_size=30/300, 
+                     max_rect_size=70/300,
                      safe_radius=60):
         
-        self.safe_radius = safe_radius
+        self.safe_radius = int(R * self.width)
         img = Image.new('L', (self.width, self.height), 255)
         draw = ImageDraw.Draw(img)
 
         grid_mask = np.zeros((self.height, self.width), dtype=bool)
         
         # Triangle
-        tri_base_width = 60
-        tri_height = 120
+        tri_base_width = self.random_scaled_w(30/300, 60/300)
+        tri_height = self.random_scaled_h(80/300, 120/300)
         mid_x = self.width // 2
         
         triangle_points = [
@@ -63,8 +69,8 @@ class MapGenerator:
         while current_obstacle_pixels < target_obstacle_pixels and attempts < max_attempts:
             attempts += 1
             
-            w = random.randint(min_rect_size, max_rect_size)
-            h = random.randint(min_rect_size, max_rect_size)
+            w = self.random_scaled_w(min_rect_size, max_rect_size)
+            h = self.random_scaled_h(min_rect_size, max_rect_size)
             x = random.randint(0, self.width - w)
             y = random.randint(0, self.height - h)
             
@@ -72,7 +78,7 @@ class MapGenerator:
             
             d_stop = self._dist_point_to_rect(self.stop_pos[0], self.stop_pos[1], x, y, w, h)
             
-            if d_start < safe_radius or d_stop < safe_radius:
+            if d_start < self.safe_radius or d_stop < self.safe_radius:
                 continue 
 
             draw.rectangle([x, y, x+w, y+h], fill=0)
@@ -87,7 +93,7 @@ class MapGenerator:
         print(f"Saved {filename}")
 
 if __name__ == "__main__":
-    gen = MapGenerator(300, 300)
+    gen = MapGenerator(1300, 1300)
     
     print(f"Previewing random rectangle maps...")
     

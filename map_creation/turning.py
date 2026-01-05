@@ -5,29 +5,36 @@ import os
 import random
 import time
 
+
 class MapGenerator:
-    def __init__(self, w=300, h=300, wall_thickness=10):
+    def __init__(self, w=300, h=300, wall_thickness=8/300):
         self.width = w
         self.height = h
-        self.wall_thickness = wall_thickness
+        self.wall_thickness =  int ( wall_thickness * w)
         self.mid_y = h // 2
         
         self.divider_gap = 40
+
+    def random_scaled_h(self, l, h ):
+        return random.randint(int(l * self.height), int(h * self.height))
+    def random_scaled_w(self, l, h ):
+        return random.randint(int(l * self.width), int(h * self.width))
+
 
     def _draw_chicane(self, grid, row_start, row_end, difficulty):
         mid_x = self.width // 2
         
         if difficulty == 'hard':
             # Hard gap
-            gap_vertical = random.randint(40, 50)
-            spacing_x = random.randint(35, 45)
+            gap_vertical = self.random_scaled_h(40/300, 50/300)
+            spacing_x = self.random_scaled_w(35/300, 45/300)
         else:
             # Easy gap
-            gap_vertical = random.randint(55, 70)
-            spacing_x = random.randint(60, 75) 
+            gap_vertical = self.random_scaled_h(55/300, 70/300)
+            spacing_x = self.random_scaled_w(60/300, 75/300) 
 
         # Jitter
-        jitter = random.randint(-15, 15)
+        jitter = self.random_scaled_w(-15/300, 15/300)
         center_x = mid_x + jitter
 
         grid[row_start : row_end - gap_vertical, 
@@ -42,9 +49,7 @@ class MapGenerator:
     def generate_map(self):
         grid = np.ones((self.width, self.height), dtype=np.uint8)
 
-        grid[0:5, :] = 0
-        grid[-5:, :] = 0
-        
+
         div_start_y = self.mid_y - (self.wall_thickness // 2)
         div_end_y   = self.mid_y + (self.wall_thickness // 2)
         
@@ -65,7 +70,7 @@ class MapGenerator:
         print(f"Saved {filename}")
 
 if __name__ == "__main__":
-    gen = MapGenerator(300,300)
+    gen = MapGenerator(1300,1300)
 
     print("Previewing turn radius map...")
 
