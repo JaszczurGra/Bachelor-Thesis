@@ -9,7 +9,7 @@ import numpy as np
 
 
 class BasePathfinding():
-    def __init__(self,robot=None,map=None,start=(0,0,0),goal=(10,10,0),bounds=(10,10),max_runtime=30.0,goal_threshold=0.0):
+    def __init__(self,robot=None,map=None,start=(0,0,0),goal=(10,10,0),bounds=(10,10),max_runtime=30.0,goal_threshold=0.0 , solved_time = None):
         """bounds = (xmin,xmax,ymin,ymax)"""
 
         #TODO remove this as this is only needed for old data 
@@ -24,7 +24,7 @@ class BasePathfinding():
         self.bounds = bounds
         self.max_runtime = max_runtime
         self.goal_threshold = goal_threshold
-        self.solved_time = None 
+        self.solved_time = solved_time 
 
 
     def print_info(self):

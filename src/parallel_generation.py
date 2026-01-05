@@ -64,7 +64,6 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot.max_velocity = random.uniform(5.0,15.0)
         robot.acceleration = random.uniform(3.0,10.0)
         robot.mu_static = random.uniform(0.5,8.0)
-        # robot.mu_static = random.uniform(1,15) # TODO high friction for testing
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
 
 
@@ -73,7 +72,6 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         
         
         # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,-math.pi),max_runtime=max_runtime,bounds=(15,15))
-
         # car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(random.uniform(0.1,0.5),random.uniform(0.3,1.0),max_velocity=15),vel_threshold=2,velocity_weight=0,start=(1.5,3.0,0.0),goal=(9.0,7.0,0.0), bounds=(10,10))
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
