@@ -11,7 +11,7 @@ ANIMALS=("grizzly" "penguin" "kangaroo" "sloth" "ferret" "badger" "llama" "otter
 
 RANDOM_ANIMAL="${ADJECTIVES[$RANDOM % ${#ADJECTIVES[@]}]}_${ANIMALS[$RANDOM % ${#ANIMALS[@]}]}"
 
-echo "Running with animal name: $RANDOM_ANIMAL"
+echo "Running with animal name: $RANDOM_ANIMAL" and map folder: "$1"
 
 
 JOB_ID=$(sbatch --parsable run_parallel_slurm.sh "$RANDOM_ANIMAL" "$1")

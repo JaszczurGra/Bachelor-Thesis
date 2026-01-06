@@ -152,7 +152,7 @@ def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
     if args.save:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_dir = os.path.join(base_dir, 'data')
-        save_dir = os.path.join(data_dir, str.join('_', [args.save] + ([args.run_id] if args.run_id else []) ))
+        save_dir = os.path.join(data_dir, str.join('_', [args.save] + ([str(args.run_id)] if args.run_id else []) ))
         #TODO don't generate all folders just the ones that are needed 
         for map_idx in range(n_maps):
             map_folder = os.path.join(save_dir, f"map_{map_idx}")
