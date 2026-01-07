@@ -263,7 +263,7 @@ class RectangleRobot(Robot):
         y = state[0][1]
         h  = self.width /2.0 * abs(math.cos(angle)) + self.length /2.0 * abs( math.sin(angle))
         w  = self.width /2.0 * abs(math.sin(angle)) + self.length /2.0 * abs( math.cos(angle))
-        return w <= x <= self._bounds[0] - w  and   h <= y <= self._bounds[1] - self.radius
+        return w <= x <= self._bounds[0] - w  and   h <= y <= self._bounds[1] 
 
     def set_map(self, map,bounds):
 
@@ -290,7 +290,7 @@ class RectangleRobot(Robot):
             y_rot = -x_grid * sin_a + y_grid * cos_a
             
 
-            rect_mask = (np.abs(x_rot) <= rect_width_px) & (np.abs(y_rot) <= rect_lenght_px)
+            rect_mask = (np.abs(y_rot) <= rect_width_px) & (np.abs(x_rot) <= rect_lenght_px)
             # np.set_printoptions(threshold=np.inf, linewidth=np.inf)
             # print(rect_mask.astype(int),end='\n\n\n')        
             self._dilated_map.append(binary_dilation(map == 0, structure=rect_mask))

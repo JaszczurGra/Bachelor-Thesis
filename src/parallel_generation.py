@@ -60,13 +60,19 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
             continue
 
         robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=180)
-        robot.wheelbase = robot.length 
+        robot.wheelbase = robot.length # * krotosze  
+        #bigger
         robot.max_velocity = random.uniform(5.0,15.0)
+        #more diverse 
         robot.acceleration = random.uniform(3.0,10.0)
+
+        #way smaller 
         robot.mu_static = random.uniform(0.5,8.0)
+        #Smaller? 
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
 
 
+        #start between 0-pi/2 
         car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))
         
         
@@ -148,12 +154,11 @@ def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
         print(f'Each map will be used approximately {base_runs_per_map} times.')
         
 
-
     if args.save:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_dir = os.path.join(base_dir, 'data')
         save_dir = os.path.join(data_dir, str.join('_', [args.save] + ([str(args.run_id)] if args.run_id is not None else []) ))
-        #TODO don't generate all folders just the ones that are needed 
+        #TODO don't generate all folders just the ones that are needed  is this correct????
         for map_idx in range(n_maps):
             map_folder = os.path.join(save_dir, f"map_{map_idx}")
             os.makedirs(map_folder, exist_ok=True)

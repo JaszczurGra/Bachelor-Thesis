@@ -5,6 +5,8 @@ import os
 import random
 import time
 
+
+#TODO bigger r 
 R = 2.5 * 1.41 / 15
 VERTICAL_OFFSET = 1.5 / 15 
 class MapGenerator:
@@ -97,7 +99,7 @@ class MapGenerator:
         print(f"Saved {filename}")
 
 if __name__ == "__main__":
-    gen = MapGenerator(1300,1300)
+    gen = MapGenerator(2300,2300)
     
     print(f"Previewing car width maps...")
     

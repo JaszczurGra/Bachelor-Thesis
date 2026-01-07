@@ -11,11 +11,11 @@
 #SBATCH --time=0-9:59:59
 #SBATCH --array=0-9
 
-eval "$(/mnt/storage_6/project_data/pl0467-01/soft/miniconda3/bin/conda shell.bash hook)"
-conda activate planning_diffusion
+# eval "$(/mnt/storage_6/project_data/pl0467-01/soft/miniconda3/bin/conda shell.bash hook)"
+# conda activate planning_diffusion
 
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-python src/parallel_generation.py --save "$1" -n 8 -t 10800 -r 3 --run_id ${TASK_ID} --map "$2" 
+python src/parallel_generation.py --save "$1" -n 8 -t 1 -r 1 --run_id ${TASK_ID} --map "$2" 
 
 
