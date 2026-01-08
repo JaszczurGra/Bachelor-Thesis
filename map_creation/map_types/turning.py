@@ -49,9 +49,13 @@ class MapGenerator(BaseMapGenerator):
 
         grid[self.mid_y - self.divider_gap // 2 : self.mid_y + self.divider_gap // 2 , self.divider_gap : -self.divider_gap] = 0
 
-        self._draw_chicane(grid, 5 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range)
-        self._draw_chicane(grid, 3 , (self.height // 2 + self.divider_gap // 2 , self.height), self.hard_gap_range, self.hard_spacing_range)
 
+        if random.random() <= 0.69:
+            self._draw_chicane(grid, 5 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range)
+            self._draw_chicane(grid, 3 , (self.height // 2 + self.divider_gap // 2 , self.height), self.hard_gap_range, self.hard_spacing_range)
+        else:
+            self._draw_chicane(grid, 3 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range)
+            self._draw_chicane(grid, 5 , (self.height // 2 + self.divider_gap // 2 , self.height), self.hard_gap_range, self.hard_spacing_range)
         return grid * 255 
 
 if __name__ == "__main__":
