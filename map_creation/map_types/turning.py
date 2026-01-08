@@ -12,12 +12,12 @@ else:
 class MapGenerator(BaseMapGenerator):
     def __init__(self, width=300, height=300, safe_radius=2.5 * 1.41 / 15,
                  start_pos=(0, 0), stop_pos=(1, 0),
-                 wall_thickness=8/300,
+                 wall_thickness=3/300,
                  divider_gap_range=(40/300, 60/300),
                  easy_gap_range=(55/300, 70/300),
-                 easy_spacing_range=(60/300, 75/300),
+                 easy_spacing_range=(35/300, 45/300),
                  hard_gap_range=(40/300, 50/300),
-                 hard_spacing_range=(35/300, 45/300)):
+                 hard_spacing_range=(15/300, 20/300)):
 
         super().__init__(width, height, safe_radius, start_pos, stop_pos)
         
@@ -36,23 +36,21 @@ class MapGenerator(BaseMapGenerator):
 
     def _draw_chicane(self, grid, n, y, gap,spacing):
         mid_x = self.width // 2
-        grid[ y: y + self.width//2 - self.random_scaled_h(*gap),mid_x - self.wall_thickness // 2 : mid_x + self.wall_thickness // 2] = 0
+        grid[ int(y[0]): int(y[1]) - self.random_scaled_h(*gap),mid_x - self.wall_thickness // 2 : mid_x + self.wall_thickness // 2] = 0
         last_offset, current_offset = 0,0 
         for i in range(n - 1):
             current_offset,last_offset =int((i % 2 - 0.5) * 2  * (abs(last_offset) +  self.random_scaled_w(*spacing))),current_offset
             up = i  // 2 % 2
-            grid[ y  + self.random_scaled_h(*gap) * (1-up):     y + self.width//2  - self.random_scaled_h(*gap) * up, mid_x - self.wall_thickness // 2 + current_offset : mid_x + self.wall_thickness // 2 + current_offset] = 0
+            # print ( y[0]  + self.random_scaled_h(*gap) * (1-up):y [1]  - self.random_scaled_h(*gap) * up, mid_x - self.wall_thickness // 2 + current_offset : mid_x + self.wall_thickness // 2 + current_offset )
+            grid[ int(y[0]  + self.random_scaled_h(*gap) * (1-up)) :int(y[1]  - self.random_scaled_h(*gap) * up), mid_x - self.wall_thickness // 2 + current_offset : mid_x + self.wall_thickness // 2 + current_offset] = 0
 
     def generate(self):
         grid = np.ones((self.height, self.width), dtype=np.uint8) 
 
-        div_start_y = self.mid_y - int(self.wall_thickness * (1 + random.random()))
-        div_end_y = self.mid_y + int(self.wall_thickness * (1 + random.random()))
-        
-        grid[div_start_y:div_end_y, self.divider_gap : -self.divider_gap] = 0
+        grid[self.mid_y - self.divider_gap // 2 : self.mid_y + self.divider_gap // 2 , self.divider_gap : -self.divider_gap] = 0
 
-        self._draw_chicane(grid, 3 , 0 , self.easy_gap_range, self.easy_spacing_range)
-        self._draw_chicane(grid, 5 , self.height//2, self.hard_gap_range, self.hard_spacing_range)
+        self._draw_chicane(grid, 5 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range)
+        self._draw_chicane(grid, 3 , (self.height // 2 + self.divider_gap // 2 , self.height), self.hard_gap_range, self.hard_spacing_range)
 
         return grid * 255 
 
