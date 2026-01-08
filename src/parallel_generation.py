@@ -22,9 +22,6 @@ import math
 #TODO should the structure be map and paths or link to map 
 #TODO remove copying maps and copy them at the end combining only? 
 
-
-#TODO bounds automatic by scale of img 
-
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
 parser.add_argument('-r', '--runs_per_planner', type=int, default=5, help='Number of runs per planner')
@@ -37,14 +34,9 @@ parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose
 parser.add_argument('--vis', action='store_true', help='Enable visualization of planning process')
 
 args = parser.parse_args()
-
-#TODO cleanup for not updating vis just saving when finished if no vis 
-
 def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, maps=None, map_indexes=None):
-    """Run planner continuously and store results at specific slot."""
     run_count = 0
     
-    #prop not neccesary 
     if maps is None or map_indexes is None or len(map_indexes) <= planner_id:
         print(f"[Planner {planner_id}] No maps provided, exiting.")
         return
@@ -53,27 +45,19 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
         start_time = time.time()
         
-
         if map_indexes[planner_id][run_count] < len(maps):
             map_data = maps[map_indexes[planner_id][run_count]]
         else:
             continue
 
         robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=180)
-        robot.wheelbase = robot.length # * krotosze  
-        #bigger
-        robot.max_velocity = random.uniform(5.0,15.0)
-        #more diverse 
-        robot.acceleration = random.uniform(3.0,10.0)
-
-        #way smaller 
-        robot.mu_static = random.uniform(0.5,8.0)
-        #Smaller? 
+        robot.wheelbase = robot.length * random.uniform(0.3, 1.0)
+        robot.max_velocity = random.uniform(5.0,20.0)
+        robot.acceleration = random.uniform(5.0,10.0)
+        robot.mu_static = random.uniform(0.05,3.0)
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
 
-
-        #start between 0-pi/2 
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))
+        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,random.uniform(0, math.pi/2)),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))
         
         
         
@@ -104,8 +88,6 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
             save_to_file(car_planner, save_dir,planner_id,run_count,map_indexes[planner_id][run_count])
 
         run_count += 1        
-        
-        
     if args.verbose:
         print(f"[Planner {planner_id}] Completed all {runs_per_planner} runs")
 
@@ -137,11 +119,14 @@ def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
     n_maps = len(maps_png)
     n_runs = num_threads * runs_per_planner
     map_indexes = [[] for _ in range(num_threads)]    
-    if args.run_id is not None or n_runs <= n_maps:
+    if args.run_id is not None  :
         # change this to generate as it did with base_runs_per_map so that least folders will be generated 
         offset = args.run_id * n_runs 
         for i in range(n_runs):
             map_indexes[i %num_threads] += [(offset + i) % n_maps]
+    elif n_runs <= n_maps:
+        for i in range(n_runs):
+            map_indexes[i %num_threads] += [i % n_maps]
     else:
         base_runs_per_map = n_runs // n_maps
         current_map =  0 
@@ -202,12 +187,6 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     else:
         print("No map loading path provided, using random maps not implemented yet")
         return
-
-
-
-
-
-
     print(f"Running {num_threads} planners ({runs_per_planner} runs each)...\n")
 
     map_indexes,save_dir = generate_map_indexes_and_folders(num_threads, runs_per_planner, maps)
@@ -232,7 +211,6 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
             time.sleep(0.05)
 
     print('\n\nAll planners completed all runs.')
-
 
 if __name__ == "__main__":
     run_parallel(args.num_threads, args.runs_per_planner, args.max_runtime)
