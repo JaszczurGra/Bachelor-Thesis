@@ -13,8 +13,8 @@ else:
 
 
 class MapGenerator(BaseMapGenerator):
-    def __init__(self, width=300, height=300, safe_radius=0.2, start_pos=(0.1, 0.1), stop_pos=(.9,.1),coverage_percent=0.2, 
-                     rect_size=(30/300, 70/300),circle_size=(30/300, 70/300) ):
+    def __init__(self, width=300, height=300, safe_radius=0.2, start_pos=(0.1, 0.1), stop_pos=(.9,.1),coverage_percent=0.15, 
+                     rect_size=(15/300, 40/300),circle_size=(15/300, 40/300) ):
         super().__init__(width, height, safe_radius, start_pos, stop_pos)
         self.coverage_percent = coverage_percent
         self.rect_size = rect_size

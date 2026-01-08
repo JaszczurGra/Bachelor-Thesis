@@ -24,8 +24,8 @@ class MapGenerator(BaseMapGenerator):
         # Default arc configurations: [(h_min, h_max, w_min, w_max), ...]
         self.arc_configs = arc_configs if arc_configs is not None else [
             (45/300, 65/300, 10/300, 15/300),   # Arc 1
-            (130/300, 160/300, 15/300, 25/300), # Arc 2
-            (230/300, 250/300, 30/300, 50/300) ] # Arc 3
+            (130/300, 160/300, 15/300, 20/300), # Arc 2
+            (230/300, 250/300, 25/300, 50/300) ] # Arc 3
 
         # Center and radius base for arcs
         self.cx = self.width / 2
