@@ -17,7 +17,7 @@ class MapGenerator(BaseMapGenerator):
                  easy_gap_range=(55/300, 70/300),
                  easy_spacing_range=(35/300, 45/300),
                  hard_gap_range=(40/300, 50/300),
-                 hard_spacing_range=(15/300, 20/300)):
+                 hard_spacing_range=(15/300, 25/300)):
 
         super().__init__(width, height, safe_radius, start_pos, stop_pos)
         
