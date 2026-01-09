@@ -51,10 +51,10 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
             continue
 
         robot=RectangleRobot(random.uniform(0.1,1),random.uniform(0.1,1),collision_check_angle_res=180)
-        robot.wheelbase = robot.length * random.uniform(0.3, 1.0)
+        robot.wheelbase = robot.length * random.uniform(0.4, 1.0)
         robot.max_velocity = random.uniform(5.0,20.0)
-        robot.acceleration = random.uniform(5.0,10.0)
-        robot.mu_static = random.uniform(0.05,3.0)
+        robot.acceleration = random.uniform(2.0,10.0)
+        robot.mu_static = random.uniform(0.05,2.5)
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
 
         car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,random.uniform(0, math.pi/2)),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))

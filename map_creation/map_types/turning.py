@@ -34,15 +34,18 @@ class MapGenerator(BaseMapGenerator):
         self.divider_gap = self.random_scaled_h(*divider_gap_range)
 
 
-    def _draw_chicane(self, grid, n, y, gap,spacing):
+
+    def _draw_chicane(self, grid, n, y, gap,spacing, wall_thickness=None):
+        wall_thickness = self.wall_thickness if wall_thickness is None else wall_thickness
         mid_x = self.width // 2
-        grid[ int(y[0]): int(y[1]) - self.random_scaled_h(*gap),mid_x - self.wall_thickness // 2 : mid_x + self.wall_thickness // 2] = 0
+        grid[ int(y[0]): int(y[1]) - self.random_scaled_h(*gap),mid_x - wall_thickness // 2 : mid_x + wall_thickness // 2] = 0
         last_offset, current_offset = 0,0 
         for i in range(n - 1):
             current_offset,last_offset =int((i % 2 - 0.5) * 2  * (abs(last_offset) +  self.random_scaled_w(*spacing))),current_offset
             up = i  // 2 % 2
             # print ( y[0]  + self.random_scaled_h(*gap) * (1-up):y [1]  - self.random_scaled_h(*gap) * up, mid_x - self.wall_thickness // 2 + current_offset : mid_x + self.wall_thickness // 2 + current_offset )
-            grid[ int(y[0]  + self.random_scaled_h(*gap) * (1-up)) :int(y[1]  - self.random_scaled_h(*gap) * up), mid_x - self.wall_thickness // 2 + current_offset : mid_x + self.wall_thickness // 2 + current_offset] = 0
+            grid[ int(y[0]  + self.random_scaled_h(*gap) * (1-up)) :int(y[1]  - self.random_scaled_h(*gap) * up), mid_x - wall_thickness // 2 + current_offset : mid_x + wall_thickness // 2 + current_offset] = 0
+
 
     def generate(self):
         grid = np.ones((self.height, self.width), dtype=np.uint8) 
@@ -50,11 +53,11 @@ class MapGenerator(BaseMapGenerator):
         grid[self.mid_y - self.divider_gap // 2 : self.mid_y + self.divider_gap // 2 , self.divider_gap : -self.divider_gap] = 0
 
 
-        if random.random() <= 0.69:
-            self._draw_chicane(grid, 5 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range)
+        if random.random() <= 0.7:
+            self._draw_chicane(grid, 5 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range, wall_thickness=self.wall_thickness * 2)
             self._draw_chicane(grid, 3 , (self.height // 2 + self.divider_gap // 2 , self.height), self.hard_gap_range, self.hard_spacing_range)
         else:
-            self._draw_chicane(grid, 3 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range)
+            self._draw_chicane(grid, 3 , (0, self.height//2 - self.divider_gap // 2)  , self.easy_gap_range, self.easy_spacing_range, wall_thickness=self.wall_thickness * 2)
             self._draw_chicane(grid, 5 , (self.height // 2 + self.divider_gap // 2 , self.height), self.hard_gap_range, self.hard_spacing_range)
         return grid * 255 
 
@@ -70,3 +73,6 @@ if __name__ == "__main__":
     plt.imshow(map_data, cmap='gray')
     plt.title("Turn radius map")
     plt.show()
+
+
+
