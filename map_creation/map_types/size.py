@@ -79,13 +79,13 @@ class MapGenerator(BaseMapGenerator):
         ], axis=0)
 
         # final_grid = np.maximum(final_grid, self.generate_save_radi())
-        final_grid[:,0:self.safe_radius] = 255
-        final_grid[:,-self.safe_radius:] = 255
+        final_grid[:,0:self.safe_radius*2] = 255
+        final_grid[:,-self.safe_radius*2:] = 255
 
         return final_grid
 
 if __name__ == "__main__":
-    gen = ArcMapGenerator(2300,2300)
+    gen = MapGenerator(2300,2300,safe_radius=0.15)
     
     print(f"Previewing car width maps...")
     
