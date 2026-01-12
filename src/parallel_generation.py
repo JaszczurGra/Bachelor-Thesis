@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from RRT_acceleration import CarOMPL_acceleration
 from STRRT_acceleration import SSTCarOMPL_acceleration
@@ -20,7 +21,8 @@ import math
 
 
 #TODO should the structure be map and paths or link to map 
-#TODO remove copying maps and copy them at the end combining only? 
+#TODO chenge the verbose add some nice tuchouces
+
 
 parser = argparse.ArgumentParser(description="Parallel OMPL Car Planners")
 parser.add_argument('-n', '--num_threads', type=int, default=4, help='Number of parallel planner threads')
@@ -29,9 +31,12 @@ parser.add_argument('-t', '--max_runtime', type=float, default=3.0, help='Maximu
 parser.add_argument('--save', type=str, default=None, help='Saving paths to files')
 parser.add_argument('--map', type=str, default=None, help='Path to load map from file')
 parser.add_argument('--run_id', type=int, default=None, help='Identifier to append to saved run folders')
-
+#run id not given run folder gen and parallel 
+#run id >= 0 just run 
+#run id = -1 generate folders only 
 parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
 parser.add_argument('--vis', action='store_true', help='Enable visualization of planning process')
+
 
 args = parser.parse_args()
 def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, maps=None, map_indexes=None):
@@ -92,11 +97,19 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         print(f"[Planner {planner_id}] Completed all {runs_per_planner} runs")
 
 
+def verbose(message):
+    if args.verbose:
+        print(message)
 
 def save_to_file(planner, save_dir,thread,run, map_index):
-    #TODO checking if dir exists? 
-    if args.verbose:
-        print(f"Saving path for Thread {thread} Run {run} Map {map_index} to file.")
+    # n = (args.run_id * args.runs_per_planner * args.num_threads if args.run_id else 0) + thread * args.runs_per_planner + run 
+    n = "_".join(([args.run_id] if args.run_id is not None else [thread,run]) +  [])
+    filepath = os.path.join(save_dir, f"map_{map_index}" , f'path_{n}.json')
+    if not os.path.exists(filepath):
+        print('Map folders not generated, skiping saving')
+        return 
+   
+    verbose(f"Saving path for Thread {thread} Run {run} Map {map_index} to file.")
 
     planner_data =  planner.print_info() 
     robot = planner_data.pop('robot', None)
@@ -107,26 +120,32 @@ def save_to_file(planner, save_dir,thread,run, map_index):
         'path': path_data,
     }
 
-    save_dir = os.path.join(save_dir,f"map_{map_index}")
-    filepath = os.path.join(save_dir,  f'path_{thread}_{run}.json')
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=2)
 
 
+def generate_map_foldrers(maps_png):
+    if not args.save:
+        return None 
+
+    save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', f"{args.save}")
+
+    if args.run_id is None or args.run_id == -1:
+        for map_idx in range(len(maps_png)):
+            map_folder = os.path.join(save_dir, f"map_{map_idx}")
+            os.makedirs(map_folder, exist_ok=True)
+            maps_png[map_idx].save(os.path.join(map_folder, 'map.png'))
+
+    return save_dir
 
 
-def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
-    n_maps = len(maps_png)
+def generate_map_indexes (num_threads, runs_per_planner, n_maps):
     n_runs = num_threads * runs_per_planner
     map_indexes = [[] for _ in range(num_threads)]    
-    if args.run_id is not None  :
-        # change this to generate as it did with base_runs_per_map so that least folders will be generated 
-        offset = args.run_id * n_runs 
+    if args.run_id is not None or  n_runs <= n_maps :
+        offset = (args.run_id if args.run_id else 0) * n_runs 
         for i in range(n_runs):
             map_indexes[i %num_threads] += [(offset + i) % n_maps]
-    elif n_runs <= n_maps:
-        for i in range(n_runs):
-            map_indexes[i %num_threads] += [i % n_maps]
     else:
         base_runs_per_map = n_runs // n_maps
         current_map =  0 
@@ -138,19 +157,7 @@ def generate_map_indexes_and_folders(num_threads, runs_per_planner, maps_png):
                 current_map = 0
         print(f'Each map will be used approximately {base_runs_per_map} times.')
         
-
-    if args.save:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        data_dir = os.path.join(base_dir, 'data')
-        save_dir = os.path.join(data_dir, str.join('_', [args.save] + ([str(args.run_id)] if args.run_id is not None else []) ))
-        #TODO don't generate all folders just the ones that are needed  is this correct????
-        for map_idx in range(n_maps):
-            map_folder = os.path.join(save_dir, f"map_{map_idx}")
-            os.makedirs(map_folder, exist_ok=True)
-            maps_png[map_idx].save(os.path.join(map_folder, 'map.png'))
-
-
-    return map_indexes,save_dir if args.save else None
+    return map_indexes
 
 
 def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
@@ -159,40 +166,32 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
     if args.vis:
         from visualizer import Visualizer
         vis = Visualizer(num_threads)  
-    
-
 
     manager = Manager()
     result_list = manager.list([None] * num_threads)  # Fixed-size list
     stop_event = manager.Event()
     
-
-    maps = []
-    if args.map is not None:
-        print(f"Loading map from: {args.map}")
-
-        maps_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        folder_path = os.path.join(maps_dir, args.map)
-        if not os.path.isdir(folder_path):
-            print("Provided map path is not a valid folder.")
-            return
-        png_files = [f for f in os.listdir(folder_path) if f.endswith('.png')]
-
-
-        for png in png_files:
-            img_path = os.path.join(folder_path, png)
-            img = Image.open(img_path) # Convert to grayscale
-            maps.append(img)
-
-    else:
-        print("No map loading path provided, using random maps not implemented yet")
+    folder_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), args.map)
+    if args.map is None or not os.path.isdir(folder_path):
+        print("No map loading path provided, or invalid path")
         return
+
+    print(f"Loading map from: {args.map}")
+
+    pngs = [Image.open(os.path.join(folder_path, f))  for f in os.listdir(folder_path) if f.endswith('.png')]
+    maps = [np.array(f.convert('1'))[::-1]  for f in pngs]
+
     print(f"Running {num_threads} planners ({runs_per_planner} runs each)...\n")
 
-    map_indexes,save_dir = generate_map_indexes_and_folders(num_threads, runs_per_planner, maps)
 
 
-    maps = [np.array(m.convert('1'))[::-1] for m in maps]
+    map_indexes = generate_map_indexes(num_threads, runs_per_planner, len(maps))
+    save_dir = generate_map_foldrers(pngs) 
+
+    if args.run_id == -1:
+        print("Map folders generated, exiting as per run_id = -1.")
+        return
+
 
     start_time = time.time()
 

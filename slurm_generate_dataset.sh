@@ -1,5 +1,10 @@
 #!/bin/bash
 
+N=8 
+R=7 
+T=3600
+
+
 if [ -z "$1" ]; then
     echo "Error: Map file required"
     echo "Usage: bash run_combined_slurm.sh <output_dir> <map_file>"
@@ -13,10 +18,8 @@ RANDOM_ANIMAL="${ADJECTIVES[$RANDOM % ${#ADJECTIVES[@]}]}_${ANIMALS[$RANDOM % ${
 
 echo "Running with animal name: $RANDOM_ANIMAL" and map folder: "$1"
 
-N=8 
-R=7 
 
-
+#--time=${TIME_LIMIT}
 JOB_ID=$(sbatch --parsable slurm_generate_folders.sh "$RANDOM_ANIMAL" "$1" "$N" "$R")
 echo "Submitted folder generation job: $JOB_ID"
 
