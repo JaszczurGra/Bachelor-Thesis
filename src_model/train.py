@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import wandb
 import numpy as np
 import matplotlib.pyplot as plt
-# from model import ConditionalPathDiffusion
+from model import DiffusionDenoiser
 import os 
 from PIL import Image
 # --- Configuration ---
@@ -26,7 +26,6 @@ CONFIG = {
 #How to set up the values in model ?? 
 
 #TODO beysian serach impementation in slurm 
-
 
 #TODO combine with visualizer.py from dataset gen for more accurate reconstruction
 # --- Dataset Class with Augmentation ---
@@ -66,7 +65,8 @@ class PathDataset(Dataset):
         self.map_indexes = []
 
         #TODO remove limit to the number of maps loaded 
-        for i, folder in enumerate(os.listdir(path)[:5]):
+        i = 0 
+        for folder in os.listdir(path)[:50]:
             map_folder = os.path.join(path, folder)
 
             map_file = os.path.join(map_folder, 'map.png')
@@ -100,6 +100,7 @@ class PathDataset(Dataset):
 
             if len(path_files) > 0:
                 self.maps.append(map_tensor)
+                i+=1 
 
         
         # TODO implement linear or sline interpolation b-spline 
@@ -114,16 +115,19 @@ class PathDataset(Dataset):
 
         #TODO propagation step size = 0.01
 
-        self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.bool) #(N,H,W)
+
+        #TODO can this acieve full speed on bools? > maps can't be bool as the convolution needs float 
+        self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.float32).unsqueeze(1) #(N,H,W)
         #chekc -1 
         self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:,:-1,:]  # [N, 128, 7] -> [N, 7, 128]
+        print('paths shape:',self.paths.shape,'maps shape:',self.maps.shape)
         self.paths = 2 * (self.paths - torch.tensor([ [path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1)) / \
                          torch.tensor([ [path_normalization[var][1] - path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1) - 1
 
         self.robots = torch.tensor(self.robots)
 
-        self.robot_dim = self.robots[1]
-        self.path_dim = self.paths[1]
+        self.robot_dim = self.robots.shape[1]
+        self.path_dim = self.paths.shape[1]
 
         #TODO do wee need that?  f.e only flip verticaly ?  
         # print("Augmenting Data (Flipping & Mirroring)...")
@@ -238,6 +242,8 @@ def kinematic_loss(predicted_path, wheelbase):
 
 class localConfig:
     def __init__(self):
+        #TODO bathc size = 64 approxiametly 5GB vram
+
         self.epochs = 2500
         self.batch_size = 64
         self.lr = 1e-4
@@ -264,7 +270,6 @@ def train():
     dataset = PathDataset(config.dataset_path)
 
 
-    return 
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
 
@@ -285,11 +290,13 @@ def train():
         num_workers=4
     )
 
-    path_length = dataset.paths.shape[2]
+
 
 
     diff = DiffusionManager(timesteps=config.timesteps, device=device)
-    model = ConditionalPathDiffusion().to(device)
+
+    #TODO only works for squere maps 
+    model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2]).to(device) 
     
     # if CONFIG['resume_path'] is not None:
     #     print(f"Loading weights from {CONFIG['resume_path']}...")
@@ -305,51 +312,52 @@ def train():
     for epoch in range(CONFIG['epochs']):
         model.train()
         epoch_loss = 0
-        for maps,robot, paths in loader:
-            maps, paths = maps.to(CONFIG['device']), paths.to(CONFIG['device'])
-            t = torch.randint(0, CONFIG['timesteps'], (maps.size(0),), device=CONFIG['device'])
-            noisy_paths, noise = diff.add_noise(paths, t)
-            noise_pred = model(noisy_paths, t, maps)
+        for map,robot, path in train_loader:
+            map, robot, path = map.to(device), robot.to(device), path.to(device)
+            # maps, paths = maps.to(CONFIG['device']), paths.to(CONFIG['device'])
+            t = torch.randint(0, CONFIG['timesteps'], (map.size(0),), device=CONFIG['device'])
+            noisy_paths, noise = diff.add_noise(path, t)
+            noise_pred = model(noisy_paths, t, map, robot)
             loss = criterion(noise_pred, noise)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
             
-        avg_loss = epoch_loss / len(loader)
-        wandb.log({"loss": avg_loss, "epoch": epoch})
+        avg_loss = epoch_loss / len(train_loader)
+        # wandb.log({"loss": avg_loss, "epoch": epoch})
         print(f"Epoch {epoch} Loss: {avg_loss:.4f}")
         
 
-        for batch in train_loader:
-    # 1. Get data
-            path_gt, map_img, robot_params = batch
+    #     PROPOER BUT NEED REWORKING for batch in train_loader:
+    # # 1. Get data
+    #         path_gt, map_img, robot_params = batch
             
-            # 2. Diffusion Step: Add noise to the path
-            t = torch.randint(0, 1000, (batch_size,))
-            noise = torch.randn_like(path_gt)
-            path_noisy = diffusion.add_noise(path_gt, noise, t)
+    #         # 2. Diffusion Step: Add noise to the path
+    #         t = torch.randint(0, 1000, (config.batch_size,))
+    #         noise = torch.randn_like(path_gt)
+    #         path_noisy = diffusion.add_noise(path_gt, noise, t)
 
-            # 3. Model Prediction
-            # Predicted_path is the model's attempt to reconstruct the 7D sequence
-            predicted_path = model(path_noisy, t, map_img, robot_params)
+    #         # 3. Model Prediction
+    #         # Predicted_path is the model's attempt to reconstruct the 7D sequence
+    #         predicted_path = model(path_noisy, t, map_img, robot_params)
 
-            # 4. Standard Diffusion Loss (Is it close to the original?)
-            loss_mse = F.mse_loss(predicted_path, path_gt)
+    #         # 4. Standard Diffusion Loss (Is it close to the original?)
+    #         loss_mse = F.mse_loss(predicted_path, path_gt)
 
-            # 5. KINEMATIC LOSS (Does it obey the bicycle model?)
-            # We use the 'wheelbase' from the robot_params (index 0 usually)
-            wheelbase = robot_params[:, 0] 
-            loss_physics = kinematic_loss(predicted_path, wheelbase)
+    #         # 5. KINEMATIC LOSS (Does it obey the bicycle model?)
+    #         # We use the 'wheelbase' from the robot_params (index 0 usually)
+    #         wheelbase = robot_params[:, 0] 
+    #         loss_physics = kinematic_loss(predicted_path, wheelbase)
 
-            # 6. Total Loss
-            # lambda is a weight (e.g., 0.1) to balance physics vs. imitation
-            total_loss = loss_mse + (lambda_physics * loss_physics)
+    #         # 6. Total Loss
+    #         # lambda is a weight (e.g., 0.1) to balance physics vs. imitation
+    #         total_loss = loss_mse + (lambda_physics * loss_physics)
 
-            # 7. Step
-            optimizer.zero_grad()
-            total_loss.backward()
-            optimizer.step()
+    #         # 7. Step
+    #         optimizer.zero_grad()
+    #         total_loss.backward()
+    #         optimizer.step()
     
         # if epoch % 100 == 0:
         #     visualize_results(model, diff, dataset, epoch)

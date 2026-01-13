@@ -99,8 +99,8 @@ class DiffusionDenoiser(nn.Module):
         self.final_conv = nn.Conv1d(128, state_dim, 1)
 
     def forward(self, x_noisy, t, map_img, robot_params):
-        # x_noisy: [B, Horizon, 6] -> [B, 6, Horizon]
-        x = x_noisy.transpose(1, 2)
+        #  [B, 6, Horizon]
+        x = x_noisy
         
         # Encode conditions
         m_feat = self.map_cnn(map_img)
@@ -108,7 +108,7 @@ class DiffusionDenoiser(nn.Module):
         t_feat = self.time_mlp(t.unsqueeze(-1).float())
         
         # Fuse features (Summing is efficient, Concat is more expressive)
-        combined_cond = m_feat + p_feat + t_feat
+        combined_cond = torch.cat([m_feat, p_feat, t_feat], dim=1)
         
         # Denoise
         x = self.input_conv(x)
@@ -116,6 +116,6 @@ class DiffusionDenoiser(nn.Module):
         x = self.res_block2(x, combined_cond)
         out = self.final_conv(x)
         
-        return out.transpose(1, 2) # Back to [B, Horizon, 6]
+        return out # Back to [B, Horizon, 6]
     
 

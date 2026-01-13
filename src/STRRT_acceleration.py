@@ -9,12 +9,25 @@ import numpy as np
 import ompl.util as ou
 ou.setLogLevel(ou.LOG_NONE) 
 
+import random
 
-#TODO 
-#robot as squere 
-#penelty for velocity in goal region
-#different planners
 
+# class SteeringZeroControlSampler(oc.ControlSampler):
+#     """Custom control sampler that zeros steering with some probability."""
+    
+#     def __init__(self, control_space, zero_prob=0.2):
+#         super().__init__(control_space)
+#         self.zero_prob = zero_prob
+#         self.default_sampler = control_space.allocDefaultControlSampler()
+    
+#     def sample(self, control):
+#         # Sample normally
+#         self.default_sampler.sample(control)
+    
+#         control[0] = -15 if control[0] < -7.5 else 15 if control[0] > 7.5 else 0  
+#         # # 20% chance to zero steering
+#         # if random.random() < self.zero_prob:
+#         #     control[1] = 0.0
 
 #TODO add time cost to the result 
 class SSTCarOMPL_acceleration(BasePathfinding):
@@ -41,6 +54,7 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         print('Theoretical shortest time in straight line stopping at the end: ', t_manouver)
         print("Theoretical max velocity", min(t_manouver * self.robot.acceleration /2, self.robot.max_velocity) )
         print('Using control duration steps:', self.control_duration)
+
 
 
 
@@ -94,6 +108,9 @@ class SSTCarOMPL_acceleration(BasePathfinding):
         
         cspace.setBounds(c_bounds)
 
+        # self.steering_zero_prob = 0.2
+        # if self.steering_zero_prob > 0:
+        #     cspace.setControlSamplerAllocator(oc.ControlSamplerAllocator(   lambda cs: SteeringZeroControlSampler(cs, self.steering_zero_prob)))
 
         si = oc.SpaceInformation(space, cspace)
         si.setPropagationStepSize(self.propagate_step_size)
@@ -159,10 +176,11 @@ if __name__ == "__main__":
     map[15:,10:34] = 0    
     # map[10:13,:40] = 0
     np.set_printoptions(threshold=np.inf,linewidth=200)
-    robot =RectangleRobot(1,0.5,max_velocity=15,acceleration=7.5,mu_static=0.5,collision_check_angle_res=30,max_steering_at_zero_v=math.pi/8)
+    robot =RectangleRobot(1,0.5,max_velocity=15,acceleration=15,mu_static=0.5,collision_check_angle_res=30,max_steering_at_zero_v=math.pi/8)
 
-    car_planner = SSTCarOMPL_acceleration(max_runtime=60, map=map,robot =robot,vel_threshold=0.2,pos_treshold=0.2,bounds=(15,15),goal=(13,10,0),start=(2,2,0))
+    car_planner = SSTCarOMPL_acceleration(max_runtime=60, map=map,robot =robot,vel_threshold=200,pos_treshold=0.2,bounds=(15,15),goal=(13,10,0),start=(2,2,0))
     print('Solved', car_planner.solve())
     print('Max velocity:', car_planner.visualize() , '/', car_planner.robot.max_velocity)
     print('Time taken by path:', car_planner.solved_time)
 
+grouchy_dolphin_2026-01-11_19:04  

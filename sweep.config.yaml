@@ -1,0 +1,44 @@
+program: model/train.py
+method: bayes  # Bayesian optimization
+metric:
+  name: val_loss
+  goal: minimize
+
+parameters:
+  lr:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.001
+  
+  batch_size:
+    values: [32, 64, 128,256]
+  
+  timesteps:
+    values: [500, 1000, 2000]
+  
+  beta_start:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.001
+  
+  beta_end:
+    distribution: uniform
+    min: 0.01
+    max: 0.05
+  
+  # Fixed parameters
+  epochs:
+    value: 100
+  
+  dataset_path:
+    value: "data/slurm_10_01_12-01-2026_00:07"
+  
+  target_path_length:
+    value: 128
+
+# Early termination
+early_terminate:
+  type: hyperband
+  min_iter: 10
+  eta: 3
+  s: 2

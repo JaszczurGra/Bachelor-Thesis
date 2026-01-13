@@ -82,6 +82,4 @@ tak z pol h mozna zrobic
 
 
 
-
-
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKXg8cj+SCvLItVBH7p3m5rt38LLc9zu0dZgom0anLFE julian.mikolajczak@student.put.poznan.pl
+scp -rp jaszczur@eagle:/mnt/storage_5/scratch/pl0467-01/jborowiecki/Bachelor-Thesis/data/sleepy_ferret_2026-01-10_14:21 ./data/slurm_10_01
