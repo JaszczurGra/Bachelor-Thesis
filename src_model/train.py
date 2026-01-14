@@ -457,6 +457,8 @@ def train():
     #     print("Resuming training from checkpoint!")
 
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10)
+  
     criterion = torch.nn.MSELoss()
     
     print(f"Starting Training on {device}...")
@@ -492,7 +494,9 @@ def train():
                 val_loss += loss.item()
         
         avg_val_loss = val_loss / len(val_loader)
-        
+
+        #TODO is the optimizer needed if so whcih one ? 
+        scheduler.step(avg_val_loss)
         print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
         wandb.log({"train_loss": avg_train_loss, "val_loss": avg_val_loss, "epoch": epoch})
         
@@ -618,6 +622,7 @@ def visualize_results(model, diff, dataset, epoch,device):
         ax.set_title(f"Epoch {epoch}")
     
     plt.tight_layout()
+    #This should return fig so we can log it thogherter with epoch etc so ther nr of logs is equal to the nr of epochs
     wandb.log({"generated_path": wandb.Image(fig)})
     # plt.show(block=False)
     # plt.pause(5)

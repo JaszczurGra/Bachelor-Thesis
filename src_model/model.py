@@ -90,27 +90,27 @@ class DiffusionDenoiser(nn.Module):
         total_cond_dim = map_feat_dim + robot_feat_dim + time_feat_dim
         
         # 4. Denoiser Layers
-        self.input_conv = nn.Conv1d(state_dim, 128, 1)
-        self.res_block1 = ResnetBlock1D(128, 128, total_cond_dim)
-        self.res_block2 = ResnetBlock1D(128, 128, total_cond_dim)
-        self.final_conv = nn.Conv1d(128, state_dim, 1)
+        # self.input_conv = nn.Conv1d(state_dim, 128, 1)
+        # self.res_block1 = ResnetBlock1D(128, 128, total_cond_dim)
+        # self.res_block2 = ResnetBlock1D(128, 128, total_cond_dim)
+        # self.final_conv = nn.Conv1d(128, state_dim, 1)
 
 
         #U-net approach:
-        # self.input_conv = nn.Conv1d(state_dim, 128, 1)
+        self.input_conv = nn.Conv1d(state_dim, 128, 1)
 
-        # # --- Encoder ---
-        # self.res_block_enc1 = ResnetBlock1D(128, 128, total_cond_dim)
-        # self.res_block_enc2 = ResnetBlock1D(128, 256, total_cond_dim) # Increase channels
+        # --- Encoder ---
+        self.res_block_enc1 = ResnetBlock1D(128, 128, total_cond_dim)
+        self.res_block_enc2 = ResnetBlock1D(128, 256, total_cond_dim) # Increase channels
 
-        # # --- Bottleneck ---
-        # self.bottleneck = ResnetBlock1D(256, 256, total_cond_dim)
+        # --- Bottleneck ---
+        self.bottleneck = ResnetBlock1D(256, 256, total_cond_dim)
 
-        # # --- Decoder ---
-        # self.res_block_dec1 = ResnetBlock1D(256, 128, total_cond_dim) # Decrease channels
-        # self.res_block_dec2 = ResnetBlock1D(128, 128, total_cond_dim)
+        # --- Decoder ---
+        self.res_block_dec1 = ResnetBlock1D(512, 128, total_cond_dim) # 256+256 from concatenation
+        self.res_block_dec2 = ResnetBlock1D(256, 128, total_cond_dim) # 128+128 from concatenation
         
-        # self.final_conv = nn.Conv1d(128, state_dim, 1)
+        self.final_conv = nn.Conv1d(128, state_dim, 1)
 
     def forward(self, x_noisy, t, map_img, robot_params):
         x = x_noisy
@@ -120,31 +120,31 @@ class DiffusionDenoiser(nn.Module):
         t_feat = self.time_mlp(t.unsqueeze(-1).float())
         
         combined_cond = torch.cat([m_feat, p_feat, t_feat], dim=1)
-        x = self.input_conv(x)
-        x = self.res_block1(x, combined_cond)
-        x = self.res_block2(x, combined_cond)
-        out = self.final_conv(x)
+        # x = self.input_conv(x)
+        # x = self.res_block1(x, combined_cond)
+        # x = self.res_block2(x, combined_cond)
+        # out = self.final_conv(x)
         
+    
+        x = self.input_conv(x_noisy)
+
+    # Encoder
+        x1 = self.res_block_enc1(x, combined_cond)
+        x2 = self.res_block_enc2(x1, combined_cond) # e.g., 128 -> 256 channels
+
+        # Bottleneck
+        b = self.bottleneck(x2, combined_cond)
+
+        # Decoder with Skip Connections
+        # The input to dec1 is the bottleneck output + the output from enc2
+        d1_in = torch.cat([b, x2], dim=1) 
+        d1 = self.res_block_dec1(d1_in, combined_cond) # Note: dec1 in_channels must be 256+256
+
+        # The input to dec2 is d1 + the output from enc1
+        d2_in = torch.cat([d1, x1], dim=1)
+        d2 = self.res_block_dec2(d2_in, combined_cond) # Note: dec2 in_channels must be 128+128
+
+        out = self.final_conv(d2)
+    
+
         return out 
-    
-    #     x = self.input_conv(x_noisy)
-
-    # # Encoder
-    #     x1 = self.res_block_enc1(x, combined_cond)
-    #     x2 = self.res_block_enc2(x1, combined_cond) # e.g., 128 -> 256 channels
-
-    #     # Bottleneck
-    #     b = self.bottleneck(x2, combined_cond)
-
-    #     # Decoder with Skip Connections
-    #     # The input to dec1 is the bottleneck output + the output from enc2
-    #     d1_in = torch.cat([b, x2], dim=1) 
-    #     d1 = self.res_block_dec1(d1_in, combined_cond) # Note: dec1 in_channels must be 256+256
-
-    #     # The input to dec2 is d1 + the output from enc1
-    #     d2_in = torch.cat([d1, x1], dim=1)
-    #     d2 = self.res_block_dec2(d2_in, combined_cond) # Note: dec2 in_channels must be 128+128
-
-    #     out = self.final_conv(d2)
-    
-
