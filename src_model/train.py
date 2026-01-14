@@ -37,14 +37,14 @@ class PathDataset(Dataset):
 
         
         #should be slightly higher to later allow robots wiht diffrent params such as higher acceleration or max_vel 
-        path_variables = ['x','y','theta','v','accel','delta']
+        path_variables = ['x','y','theta']#,'v','accel','delta']
         path_normalization = {
             'x': (0,15),
             'y': (0,15),
-            'theta': (-np.pi, np.pi),
-            'v': (0,20),
-            'delta': (-np.pi/2, np.pi/2),
-            'accel': (-10, 10)
+            'theta': (-np.pi, np.pi)#,
+            # 'v': (0,20),
+            # 'delta': (-np.pi/2, np.pi/2),
+            # 'accel': (-10, 10)
         }
         robot_variables = [   "wheelbase", "max_velocity","max_steering_at_zero_v","max_steering_at_max_v","acceleration","mu_static","width","length"]
         
@@ -86,8 +86,10 @@ class PathDataset(Dataset):
             for path_file in path_files:
                 with open(os.path.join(map_folder, path_file), 'r') as f:
                     data = json.load(f)
-                
-                    path_tensor = data['path']
+                    
+                    raw_path = data['path']
+
+                    path_tensor = [row[:3] + [row[-1]] for row in raw_path]
                     #do we need dt? last element in path 
                     robot = data['robot']
                     robot_array = [0] * len(robot_variables)
@@ -406,7 +408,7 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 200,
+    'n_maps': 2,
     'beta_start': 1e-4,
     'beta_end': 0.02
 }
