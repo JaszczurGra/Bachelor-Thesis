@@ -2,15 +2,15 @@
 
 # --- SLURM JOB DEFINITION ---
 #SBATCH --job-name=single_train_run
-#SBATCH --output=log/train_%j.out  # %j will be replaced by the job ID
+#SBATCH --output=log/train_%j.out
 #SBATCH --error=log/train_%j.err
-#SBATCH --partition=gpu
+#SBATCH --partition=tesla
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
+#SBATCH --gpus-per-node=1
 #SBATCH --mem=32G
-#SBATCH --time=0-10:00:00 # 10 hours
+#SBATCH --time=0-10:00:00
 
 # --- ENVIRONMENT SETUP ---
 # Activate your Conda environment
