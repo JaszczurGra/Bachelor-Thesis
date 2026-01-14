@@ -402,11 +402,11 @@ local_config = {
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "dataset_path": "data/slurm_10_01_12-01-2026_00:07",
+    "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 100,
+    'n_maps': 200,
     'beta_start': 1e-4,
     'beta_end': 0.02
 }
