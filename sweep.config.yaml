@@ -33,9 +33,6 @@ parameters:
   dataset_path:
     value: "data/slurm_10_01_12-01-2026_00:07"
   
-  target_path_length:
-    value: 128
-
 # Early termination
 early_terminate:
   type: hyperband

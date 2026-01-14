@@ -54,23 +54,20 @@ class ResnetBlock1D(nn.Module):
 class DiffusionDenoiser(nn.Module):
 
     #TODO proper sizes for robot and state dim either remove unimportant or set the size for all of them  
-    def __init__(self, state_dim=6, robot_param_dim=8, map_size=500):
+    def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128):
         super().__init__()
 
         #TODO should be settable 
-        #map_feature_dim 
+        #map_feature_dim ,robot_feat_dim ,robot_feat_dim
         #128 nr of nodes per layer 
         # 4 layers (2 internal layers)
-        self.map_feat_dim = 256
-        self.robot_feat_dim = 128
-        self.time_feat_dim = 64
         # 1. Map Encoder
         self.map_cnn = nn.Sequential(
             nn.Conv2d(1, 16, 3, stride=2, padding=1), # Output: 32x32
             nn.ReLU(),
             nn.Conv2d(16, 32, 3, stride=2, padding=1), # Output: 16x16
             nn.Flatten(),
-            nn.Linear(32 * (map_size//4) * (map_size//4), self.map_feat_dim)
+            nn.Linear(32 * (map_size//4) * (map_size//4), map_feat_dim)
         )
         
         # 2. Robot Param Encoder
@@ -79,18 +76,18 @@ class DiffusionDenoiser(nn.Module):
         self.param_mlp = nn.Sequential(
             nn.Linear(robot_param_dim, 64),
             nn.ReLU(),
-            nn.Linear(64, self.robot_feat_dim)
+            nn.Linear(64, robot_feat_dim)
         )
 
         # 3. Time Embedding (Standard for Diffusion)
         self.time_mlp = nn.Sequential(
             nn.Linear(1, 64),
             nn.ReLU(),
-            nn.Linear(64, self.time_feat_dim)
+            nn.Linear(64, time_feat_dim)
         )
 
         # Combined Condition Dim
-        total_cond_dim = self.map_feat_dim + self.robot_feat_dim + self.time_feat_dim
+        total_cond_dim = map_feat_dim + robot_feat_dim + time_feat_dim
         
         # 4. Denoiser Layers
         self.input_conv = nn.Conv1d(state_dim, 128, 1)
@@ -98,24 +95,56 @@ class DiffusionDenoiser(nn.Module):
         self.res_block2 = ResnetBlock1D(128, 128, total_cond_dim)
         self.final_conv = nn.Conv1d(128, state_dim, 1)
 
+
+        #U-net approach:
+        # self.input_conv = nn.Conv1d(state_dim, 128, 1)
+
+        # # --- Encoder ---
+        # self.res_block_enc1 = ResnetBlock1D(128, 128, total_cond_dim)
+        # self.res_block_enc2 = ResnetBlock1D(128, 256, total_cond_dim) # Increase channels
+
+        # # --- Bottleneck ---
+        # self.bottleneck = ResnetBlock1D(256, 256, total_cond_dim)
+
+        # # --- Decoder ---
+        # self.res_block_dec1 = ResnetBlock1D(256, 128, total_cond_dim) # Decrease channels
+        # self.res_block_dec2 = ResnetBlock1D(128, 128, total_cond_dim)
+        
+        # self.final_conv = nn.Conv1d(128, state_dim, 1)
+
     def forward(self, x_noisy, t, map_img, robot_params):
-        #  [B, 6, Horizon]
         x = x_noisy
         
-        # Encode conditions
         m_feat = self.map_cnn(map_img)
         p_feat = self.param_mlp(robot_params)
         t_feat = self.time_mlp(t.unsqueeze(-1).float())
         
-        # Fuse features (Summing is efficient, Concat is more expressive)
         combined_cond = torch.cat([m_feat, p_feat, t_feat], dim=1)
-        
-        # Denoise
         x = self.input_conv(x)
         x = self.res_block1(x, combined_cond)
         x = self.res_block2(x, combined_cond)
         out = self.final_conv(x)
         
-        return out # Back to [B, Horizon, 6]
+        return out 
+    
+    #     x = self.input_conv(x_noisy)
+
+    # # Encoder
+    #     x1 = self.res_block_enc1(x, combined_cond)
+    #     x2 = self.res_block_enc2(x1, combined_cond) # e.g., 128 -> 256 channels
+
+    #     # Bottleneck
+    #     b = self.bottleneck(x2, combined_cond)
+
+    #     # Decoder with Skip Connections
+    #     # The input to dec1 is the bottleneck output + the output from enc2
+    #     d1_in = torch.cat([b, x2], dim=1) 
+    #     d1 = self.res_block_dec1(d1_in, combined_cond) # Note: dec1 in_channels must be 256+256
+
+    #     # The input to dec2 is d1 + the output from enc1
+    #     d2_in = torch.cat([d1, x1], dim=1)
+    #     d2 = self.res_block_dec2(d2_in, combined_cond) # Note: dec2 in_channels must be 128+128
+
+    #     out = self.final_conv(d2)
     
 
