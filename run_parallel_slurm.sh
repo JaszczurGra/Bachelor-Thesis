@@ -8,8 +8,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=1000
-#SBATCH --time=0-15:59:59
-#SBATCH --array=0-69
+#SBATCH --time=0-2:59:59
+#SBATCH --array=0-39
 
 eval "$(/mnt/storage_6/project_data/pl0467-01/soft/miniconda3/bin/conda shell.bash hook)"
 conda activate planning_diffusion
