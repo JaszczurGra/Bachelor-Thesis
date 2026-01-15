@@ -7,7 +7,6 @@ T=3600
 
 if [ -z "$1" ]; then
     echo "Error: Map file required"
-    echo "Usage: bash run_combined_slurm.sh <output_dir> <map_file>"
     exit 1
 fi
 

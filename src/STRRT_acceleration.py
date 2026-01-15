@@ -183,4 +183,3 @@ if __name__ == "__main__":
     print('Max velocity:', car_planner.visualize() , '/', car_planner.robot.max_velocity)
     print('Time taken by path:', car_planner.solved_time)
 
-grouchy_dolphin_2026-01-11_19:04  
