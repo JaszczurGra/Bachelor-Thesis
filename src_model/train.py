@@ -89,7 +89,7 @@ class PathDataset(Dataset):
                     
                     raw_path = data['path']
 
-                    path_tensor = [row[:3] + [row[-1]] for row in raw_path]
+                    path_tensor = [row[:3]  for row in raw_path]
                     #do we need dt? last element in path 
                     robot = data['robot']
                     robot_array = [0] * len(robot_variables)
@@ -122,7 +122,7 @@ class PathDataset(Dataset):
         self.paths = self.resample_path(self.paths,max(len(p) for p in self.paths) ,path_variables, dt=0.01)
         self.dts = [p[-1][-1] for p in self.paths]  
         # self.paths = torch.tensor(self.paths).float().permute(0,2,1)  # [N, 128, 7] -> [N, 7, 128]
-        self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:,:-1,:] 
+        self.paths = torch.tensor(self.paths).float().permute(0,2,1)
         self.paths = 2 * (self.paths - torch.tensor([ [path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1)) / \
                          torch.tensor([ [path_normalization[var][1] - path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1) - 1
         #TODO do robot normalization here instead of in the loop for faster loading 
