@@ -8,7 +8,7 @@ conda activate planning_diffusion
 #could have 2 diffrent configs for the 2 waves f.e more epocohs for fine tuning in second wave 
 
 # Create sweep once
-SWEEP_OUTPUT=$(wandb sweep sweep_config.yaml 2>&1)
+SWEEP_OUTPUT=$(wandb sweep sweep.config.yaml 2>&1)
 SWEEP_ID=$(echo "$SWEEP_OUTPUT" | grep -oP 'wandb agent \K.*')
 
 echo "Sweep ID: $SWEEP_ID"
