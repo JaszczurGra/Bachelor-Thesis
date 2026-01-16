@@ -103,7 +103,7 @@ def verbose(message):
 
 def save_to_file(planner, save_dir,thread,run, map_index):
     # n = (args.run_id * args.runs_per_planner * args.num_threads if args.run_id else 0) + thread * args.runs_per_planner + run 
-    n = "_".join(([args.run_id] if args.run_id is not None else [thread,run]) +  [])
+    n = "_".join(([args.run_id] if args.run_id is not None else []) +  [thread,run])
     filepath = os.path.join(save_dir, f"map_{map_index}" , f'path_{n}.json')
     if not os.path.exists(filepath):
         print('Map folders not generated, skiping saving')
@@ -206,7 +206,9 @@ def run_parallel(num_threads=4, runs_per_planner=5, max_runtime=3):
         while not all(r.ready() for r in async_results):
             if args.vis:
                 vis.update(result_list)
-            print(f"Elapsed Time: {time.time() - start_time:.2f}/{max_runtime*runs_per_planner}s", end='\r')
+            if args.run_id is None:
+                print(f"Elapsed Time: {time.time() - start_time:.2f}/{max_runtime*runs_per_planner}s", end='\r')
+            
             time.sleep(0.05)
 
     print('\n\nAll planners completed all runs.')
