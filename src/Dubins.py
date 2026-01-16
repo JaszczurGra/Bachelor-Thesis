@@ -26,7 +26,7 @@ class Dubins_pathfinding(BasePathfinding):
     def __init__(self,robot=Robot(),map=None,start=(1.0,1.0,0),goal=(9.0,9.0,0),max_runtime=30.0,bounds=(10,10),interpolate_steps=50):
         super().__init__(robot, map, start, goal, bounds, max_runtime) 
         self.interpolate_steps = interpolate_steps
-        self.robot.set_map(map)
+        self.robot.set_map(map,bounds)
 
     def solve(self):
         space = ob.DubinsStateSpace(self.robot.wheelbase / math.tan(self.robot.max_steering_at_zero_v), False)
@@ -51,21 +51,8 @@ class Dubins_pathfinding(BasePathfinding):
 
         ss.setStartAndGoalStates (start,goal)
 
-        # ignore_theta_goal = True
-        # if ignore_theta_goal:
-        #     goal_state = ob.State(space)
-        #     goal_state().setX(self.goal_point[0])
-        #     goal_state().setY(self.goal_point[1])
-        #     goal_state().setYaw(0.0) 
-            
-        #     def goal_distance(state):
-        #         dx = state[0][0] - self.goal_point[0]
-        #         dy = state[0][1] - self.goal_point[1]
-        #         return math.sqrt(dx * dx + dy * dy)
-        #     ss.setGoal(ob.GoalState(si, goal_state, goal_distance))
-
         ss.setStateValidityChecker(ob.StateValidityCheckerFn(partial(self.is_state_valid, si)))
-        ss.getSpaceInformation().setStateValidityCheckingResolution(0.005)
+        ss.getSpaceInformation().setStateValidityCheckingResolution(min (self.robot.width, self.robot.length) * 0.2 / max ( self.bounds[0] , self.bounds[1])  if isinstance(self.robot, RectangleRobot) else self.robot.radius * 0.2 / max ( self.bounds[0] , self.bounds[1]))
 
         planer = og.RRTstar(ss.getSpaceInformation())
         ss.setPlanner(planer)
@@ -86,7 +73,7 @@ if __name__ == "__main__":
     ou.setLogLevel(ou.LOG_DEBUG) 
     map =np.ones((100,100)) * 255
     map[0,0] = 0
-    map[30:,20:50] = 0 
+    map[30:,50:52] = 0 
 
     car_planner = Dubins_pathfinding(max_runtime=6,robot=RectangleRobot(0.5,1.0),map=map,start=(1,5.0,0),goal=(9.0,9.0,0),bounds=(10,15))
     print(car_planner.solve())

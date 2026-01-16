@@ -37,6 +37,8 @@ parser.add_argument('--run_id', type=int, default=None, help='Identifier to appe
 parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
 parser.add_argument('--vis', action='store_true', help='Enable visualization of planning process')
 
+parser.add_argument('--dubins', action='store_true', help='Use Dubins planner instead of SSTCarOMPL_acceleration')
+
 
 args = parser.parse_args()
 def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, runs_per_planner, save_dir=None, maps=None, map_indexes=None):
@@ -62,11 +64,14 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
         robot.mu_static = random.uniform(0.05,2.5)
         robot.max_steering_at_zero_v = random.uniform(math.pi / 8.0, math.pi / 3.0)
 
-        car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,random.uniform(0, math.pi/2)),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))
+        if args.dubins:
+            robot.collision_check_angle_res = max(robot.collision_check_angle_res // 3, 1) 
+            car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.5,1.5,random.uniform(0, math.pi/2)),goal=(13.5,1.5,0),max_runtime=max_runtime,bounds=(15,15))
+        else:
+            car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.5,1.5,random.uniform(0, math.pi/2)),goal=(13.5,1.5,0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1,bounds=(15,15))
         
         
         
-        # car_planner = Dubins_pathfinding(robot=robot,map=map_data,start=(1.5,1.5,0),goal=(13.5,1.5,-math.pi),max_runtime=max_runtime,bounds=(15,15))
         # car_planner = Pacejka_pathfinding(max_runtime=max_runtime, map=map_data,robot =PacejkaRectangleRobot(random.uniform(0.1,0.5),random.uniform(0.3,1.0),max_velocity=15),vel_threshold=2,velocity_weight=0,start=(1.5,3.0,0.0),goal=(9.0,7.0,0.0), bounds=(10,10))
         # car_planner = CarOMPL_acceleration(robot=robot,Obstacles=obstacles,start=(1.0,1.0),goal=(9.0,9.0),goal_treshold=0.5,max_runtime=max_runtime)
         # car_planner = SSTCarOMPL_acceleration(robot=robot,map=map_data,start=(1.0,1.0),goal=(9.0,9.0),pos_treshold=0.5,max_runtime=max_runtime, vel_threshold=1, velocity_weight=0.1)
@@ -75,7 +80,7 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
 
         if args.verbose:
             print(f"[Planner {planner_id}] Starting run #{run_count + 1}")
-            print(f"Car planner params: {car_planner.print_info()}")
+            print(f"Car planner params: {car_planner.print_info()}", end='\n\n')
         solved = car_planner.solve()
 
         if args.verbose:
@@ -90,6 +95,7 @@ def run_planner_continuous(planner_id, max_runtime, result_list, stop_event, run
                 'run': run_count, 
             }
         if solved and save_dir is not None and map_indexes is not None:
+            print('gonna save')
             save_to_file(car_planner, save_dir,planner_id,run_count,map_indexes[planner_id][run_count])
 
         run_count += 1        
@@ -103,14 +109,13 @@ def verbose(message):
 
 def save_to_file(planner, save_dir,thread,run, map_index):
     # n = (args.run_id * args.runs_per_planner * args.num_threads if args.run_id else 0) + thread * args.runs_per_planner + run 
-    n = "_".join(([args.run_id] if args.run_id is not None else []) +  [thread,run])
-    filepath = os.path.join(save_dir, f"map_{map_index}" , f'path_{n}.json')
-    if not os.path.exists(filepath):
+    n = "_".join(([str(args.run_id)] if args.run_id is not None else []) +  [str(thread), str(run)])
+    folder_path = os.path.join(save_dir, f"map_{map_index}")
+    if not os.path.exists(folder_path):
         print('Map folders not generated, skiping saving')
         return 
-   
     verbose(f"Saving path for Thread {thread} Run {run} Map {map_index} to file.")
-
+    filepath = os.path.join(folder_path, f'path_{n}.json')
     planner_data =  planner.print_info() 
     robot = planner_data.pop('robot', None)
     path_data = planner_data.pop('solved_path', None)
@@ -119,7 +124,6 @@ def save_to_file(planner, save_dir,thread,run, map_index):
         'planner': planner_data,
         'path': path_data,
     }
-
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=2)
 
@@ -136,6 +140,7 @@ def generate_map_foldrers(maps_png):
             os.makedirs(map_folder, exist_ok=True)
             maps_png[map_idx].save(os.path.join(map_folder, 'map.png'))
 
+    verbose(f"Paths will be saved to: {save_dir}")
     return save_dir
 
 

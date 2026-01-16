@@ -56,7 +56,9 @@ class DiffusionDenoiser(nn.Module):
     #TODO proper sizes for robot and state dim either remove unimportant or set the size for all of them  
     def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128):
         super().__init__()
-
+        print('Initializing DiffusionDenoiser with state_dim:', state_dim, 'robot_param_dim:', robot_param_dim, 'map_size:', map_size)
+        print('Feature dims - map:', map_feat_dim, 'robot:', robot_feat_dim, 'time:', time_feat_dim)
+        print('Network depth:', num_internal_layers, 'base layer dim:', base_layer_dim)
         #TODO should be settable 
         #map_feature_dim ,robot_feat_dim ,robot_feat_dim
         #128 nr of nodes per layer 
@@ -96,21 +98,51 @@ class DiffusionDenoiser(nn.Module):
         # self.final_conv = nn.Conv1d(128, state_dim, 1)
 
 
-        #U-net approach:
-        self.input_conv = nn.Conv1d(state_dim, 128, 1)
 
-        # --- Encoder ---
-        self.res_block_enc1 = ResnetBlock1D(128, 128, total_cond_dim)
-        self.res_block_enc2 = ResnetBlock1D(128, 256, total_cond_dim) # Increase channels
+        self.input_conv = nn.Conv1d(state_dim, base_layer_dim, 1)
 
-        # --- Bottleneck ---
-        self.bottleneck = ResnetBlock1D(256, 256, total_cond_dim)
+        self.encoders = nn.ModuleList()
+        self.decoders = nn.ModuleList()
 
-        # --- Decoder ---
-        self.res_block_dec1 = ResnetBlock1D(512, 128, total_cond_dim) # 256+256 from concatenation
-        self.res_block_dec2 = ResnetBlock1D(256, 128, total_cond_dim) # 128+128 from concatenation
+        # --- Create Encoder Layers ---
+        # Example: channel_dims = (128, 256, 512)
+        # Creates blocks for 128->128, 128->256, 256->512
+        for i in range(num_internal_layers):
+            in_ch = base_layer_dim * math.pow(2,i-1) if i > 0 else base_layer_dim
+            out_ch = base_layer_dim * math.pow(2,i)
+            self.encoders.append(ResnetBlock1D(int(in_ch), int(out_ch), total_cond_dim))
+
+        # --- Create Bottleneck Layer ---
+        bottleneck_ch = int(base_layer_dim * math.pow(2,num_internal_layers-1))
+        self.bottleneck = ResnetBlock1D(bottleneck_ch, bottleneck_ch, total_cond_dim)
+
+        # --- Create Decoder Layers ---
+        # Creates blocks for (512+512)->256, (256+256)->128, (128+128)->128
+        for i in range(num_internal_layers - 1, -1, -1):
+            in_ch = (base_layer_dim * math.pow(2,i+1)) if i < num_internal_layers -1 else bottleneck_ch * 2
+            out_ch = base_layer_dim * math.pow(2,i-1) if i > 0 else base_layer_dim
+            self.decoders.append(ResnetBlock1D(int(in_ch), int(out_ch), total_cond_dim))
+            
+        self.final_conv = nn.Conv1d(base_layer_dim, state_dim, 1)
+
+        # self.encoders = []
+        # self.decoeders = []
+        # self.bottleneck = ResnetBlock1D(256, 256, total_cond_dim)
+        # #U-net approach:
+        # self.input_conv = nn.Conv1d(state_dim, 128, 1)
+
+        # # --- Encoder ---
+        # self.res_block_enc1 = ResnetBlock1D(128, 128, total_cond_dim)
+        # self.res_block_enc2 = ResnetBlock1D(128, 256, total_cond_dim) # Increase channels
+
+        # # --- Bottleneck ---
+        # self.bottleneck = ResnetBlock1D(256, 256, total_cond_dim)
+
+        # # --- Decoder ---
+        # self.res_block_dec1 = ResnetBlock1D(512, 128, total_cond_dim) # 256+256 from concatenation
+        # self.res_block_dec2 = ResnetBlock1D(256, 128, total_cond_dim) # 128+128 from concatenation
         
-        self.final_conv = nn.Conv1d(128, state_dim, 1)
+        # self.final_conv = nn.Conv1d(128, state_dim, 1)
 
     def forward(self, x_noisy, t, map_img, robot_params):
         x = x_noisy
@@ -120,31 +152,20 @@ class DiffusionDenoiser(nn.Module):
         t_feat = self.time_mlp(t.unsqueeze(-1).float())
         
         combined_cond = torch.cat([m_feat, p_feat, t_feat], dim=1)
-        # x = self.input_conv(x)
-        # x = self.res_block1(x, combined_cond)
-        # x = self.res_block2(x, combined_cond)
-        # out = self.final_conv(x)
-        
-    
+
         x = self.input_conv(x_noisy)
 
-    # Encoder
-        x1 = self.res_block_enc1(x, combined_cond)
-        x2 = self.res_block_enc2(x1, combined_cond) # e.g., 128 -> 256 channels
+        skip_connections = []
+        for encoder_block in self.encoders:
+            x = encoder_block(x, combined_cond)
+            skip_connections.append(x)
 
-        # Bottleneck
-        b = self.bottleneck(x2, combined_cond)
+        x = self.bottleneck(x, combined_cond)
 
-        # Decoder with Skip Connections
-        # The input to dec1 is the bottleneck output + the output from enc2
-        d1_in = torch.cat([b, x2], dim=1) 
-        d1 = self.res_block_dec1(d1_in, combined_cond) # Note: dec1 in_channels must be 256+256
+        for decoder_block in self.decoders:
+            skip = skip_connections.pop()
+            x = torch.cat([x, skip], dim=1) # Concatenate along channel dimension
+            x = decoder_block(x, combined_cond)
 
-        # The input to dec2 is d1 + the output from enc1
-        d2_in = torch.cat([d1, x1], dim=1)
-        d2 = self.res_block_dec2(d2_in, combined_cond) # Note: dec2 in_channels must be 128+128
-
-        out = self.final_conv(d2)
-    
-
-        return out 
+        out = self.final_conv(x)
+        return out

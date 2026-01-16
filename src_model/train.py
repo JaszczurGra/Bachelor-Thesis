@@ -66,12 +66,8 @@ class PathDataset(Dataset):
 
         self.map_indexes = []
 
- 
-        #TODO remove limit to the number of maps loaded 
-        #TODO 
-        #TODO 
-        #TODO 
         i = 0 
+        #something for loaing n_maps doesn't work needs to be bigger
         for folder in os.listdir(path)[:n_maps]:
             map_folder = os.path.join(path, folder)
 
@@ -87,10 +83,6 @@ class PathDataset(Dataset):
                 with open(os.path.join(map_folder, path_file), 'r') as f:
                     data = json.load(f)
                     
-                    raw_path = data['path']
-
-                    path_tensor = [row[:3]  for row in raw_path]
-                    #do we need dt? last element in path 
                     robot = data['robot']
                     robot_array = [0] * len(robot_variables)
                     for j, var in enumerate(robot_variables):
@@ -102,7 +94,7 @@ class PathDataset(Dataset):
 
                     self.robots.append(robot_array)
                     self.planners.append(planner)
-                    self.paths.append(path_tensor)
+                    self.paths.append(data['path'])
                     self.map_indexes.append(i) 
 
 
@@ -112,7 +104,6 @@ class PathDataset(Dataset):
 
         
  
-
 
         #TODO propagation step size = 0.01 is constant right now probably not a problem no need for nomalization
         #TODO move tensors to gpu for this operation and then back to cpu to not take space 
@@ -130,7 +121,6 @@ class PathDataset(Dataset):
 
         self.robot_dim = self.robots.shape[1]
         self.path_dim = self.paths.shape[1]
-
         #TODO do wee need that?  f.e only flip verticaly ?  
         # print("Augmenting Data (Flipping & Mirroring)...")
         # for item in data:
@@ -159,7 +149,7 @@ class PathDataset(Dataset):
         #     # self.maps.append(m_v)
         #     # self.paths.append(p_v.transpose(0, 1))
             
-        print(f"Training on {len(self.maps)} maps with {len(self.paths)} paths.")
+        print(f"Training on {len(self.maps)} maps with {len(self.paths)} paths.", end='\n\n')
         
     def __len__(self):
         return len(self.paths)
@@ -212,8 +202,10 @@ class PathDataset(Dataset):
                     spline = CubicSpline(original_time_points, path_np[:, i])
                     resampled_path_full[:, i] = spline(new_time_points)
             
-            resampled_path_full[:, -1] = new_dt
+            if len(path_np[0]) > len(path_variables):
+                resampled_path_full[:, -1] = new_dt
             
+        # TODO make this adapt to normalization params len, and return dt's separately if exist
             resampled_paths.append(resampled_path_full.tolist())
         return resampled_paths
 
@@ -230,14 +222,12 @@ class DiffusionManager:
         self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - self.alphas_cumprod)
 
-    # is this necessary or just onliner in train loop 
     def add_noise(self, x_start, t):
         noise = torch.randn_like(x_start)
         sqrt_alpha = self.sqrt_alphas_cumprod[t][:, None, None]
         sqrt_one_minus_alpha = self.sqrt_one_minus_alphas_cumprod[t][:, None, None]
         return sqrt_alpha * x_start + sqrt_one_minus_alpha * noise, noise
 
-    #TODO what it does ? 
     def sample(self, model, map_cond,robot_params, real_path):
         model.eval()
         with torch.no_grad():
@@ -246,155 +236,29 @@ class DiffusionManager:
             
             for i in reversed(range(self.timesteps)):
                 t = torch.full((batch_size,), i, device=self.device, dtype=torch.long)
-                
-                # Predict noise
                 predicted_noise = model(x, t, map_cond, robot_params)
-                
-                # Get scheduling parameters
                 alpha_t = self.alphas[i]
                 alpha_cumprod_t = self.alphas_cumprod[i]
                 beta_t = self.betas[i]
-                
-                # Compute coefficients for DDPM sampling
-                # x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (beta_t / sqrt(1 - alpha_cumprod_t)) * noise) + sqrt(beta_t) * z
-                
-                # Coefficient for x_t
                 coef1 = 1 / torch.sqrt(alpha_t)
-                
-                # Coefficient for predicted noise
                 coef2 = beta_t / torch.sqrt(1 - alpha_cumprod_t)
-                
-                # Mean of the reverse distribution
                 mean = coef1 * (x - coef2 * predicted_noise)
-                
-                # Add noise (except at last step)
                 if i > 0:
                     noise = torch.randn_like(x)
                     sigma = torch.sqrt(beta_t)
                     x = mean + sigma * noise
                 else:
                     x = mean
-                
                 # CRITICAL: Clamp to prevent explosion
-                # Paths should stay in normalized range [-1, 1]
-                x = torch.clamp(x, -3, 3)  # Allow some wiggle room, then clamp hard
-            
-            # Final clamp to ensure output is in valid range
+                x = torch.clamp(x, -3, 3)  # Allow some wiggle room
             x = torch.clamp(x, -1, 1)
             
         return x
 
 
 
-            # result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
-def kinematic_loss(predicted_path, robot_params, dt=0.01):
-    """
-    Compute physics-based kinematic loss for predicted paths.
-    
-    Args:
-        predicted_path: [B, state_dim, horizon] - Model output
-                        Channels: [x, y, theta, v, accel, delta]
-        robot_params: [B, robot_param_dim] - Robot parameters
-                      Indices: [wheelbase, max_velocity, max_steering_at_zero_v, 
-                               max_steering_at_max_v, acceleration, mu_static, width, length]
-        dt: float - Time step (default 0.01)
-    
-    Returns:
-        loss: scalar - Physics violation penalty
-    """
-    # Extract robot parameters (denormalize from [-1, 1])
-    robot_normalization = {
-        "wheelbase": (0.04, 1),
-        "max_velocity": (5, 20),
-        "max_steering_at_zero_v": (-np.pi/2, np.pi/2),
-        "max_steering_at_max_v": (-np.pi/2, np.pi/2),
-        "acceleration": (2, 10),
-        "mu_static": (0.05, 2.5),
-        "width": (0.1, 1),
-        "length": (0.1, 1)
-    }
-    
-    # Denormalize robot params
-    wheelbase = (robot_params[:, 0] + 1) / 2 * (1 - 0.04) + 0.04  # [B]
-    mu_static = (robot_params[:, 5] + 1) / 2 * (2.5 - 0.05) + 0.05  # [B]
-    max_steer_zero_v = (robot_params[:, 2] + 1) / 2 * (np.pi) - np.pi/2  # [B]
-    
-    # Add dimensions for broadcasting: [B, 1]
-    wheelbase = wheelbase.unsqueeze(1)
-    mu_static = mu_static.unsqueeze(1)
-    max_steer_zero_v = max_steer_zero_v.unsqueeze(1)
-    
-    # Extract state variables [B, horizon]
-    # Indices: x=0, y=1, theta=2, v=3, accel=4, delta=5
-    x = predicted_path[:, 0, :-1]      # [B, horizon-1]
-    y = predicted_path[:, 1, :-1]
-    theta = predicted_path[:, 2, :-1]
-    v = predicted_path[:, 3, :-1]
-    accel = predicted_path[:, 4, :-1]
-    delta = predicted_path[:, 5, :-1]
-    
-    # Compute effective steering angle with lateral force limit
-    # At high speeds, lateral force constraint limits turning radius
-    lateral_force_min_v = 0.1  # Minimum velocity for lateral force calculation
-    
-    # Compute angle with lateral force constraint
-    # F_lateral = m * v^2 / r < mu * m * g
-    # r = L / tan(delta) => tan(delta) = L / r
-    # r_min = v^2 / (mu * g)
-    # delta_max = arctan(L / r_min) = arctan(L * mu * g / v^2)
-    
-    g = 9.81
-    # Avoid division by zero at low speeds
-    v_safe = torch.clamp(v, min=lateral_force_min_v)
-    
-    # Maximum steering angle from lateral force constraint
-    delta_max_lateral = torch.atan(wheelbase * mu_static * g / (v_safe ** 2))  # [B, horizon-1]
-    
-    # Apply constraint: use lateral force limit at high speed, mechanical limit at low speed
-    # Use smooth transition based on velocity
-    use_lateral_limit = (v >= lateral_force_min_v).float()
-    
-    # Constrain steering angle
-    delta_constrained = torch.where(
-        v >= lateral_force_min_v,
-        torch.clamp(delta, -delta_max_lateral, delta_max_lateral),  # High speed: lateral force limit
-        torch.clamp(delta, -max_steer_zero_v, max_steer_zero_v)     # Low speed: mechanical limit
-    )
-    
-    # Compute effective angle for dynamics
-    angle = delta_constrained  # Could also use tan approximation for small angles
-    
-    # Expected next states based on bicycle model with constraints
-    # dx/dt = v * cos(theta)
-    # dy/dt = v * sin(theta)
-    # dtheta/dt = (v / L) * tan(delta)  [or simplified: (v / L) * angle]
-    # dv/dt = accel
-    
-    expected_x_next = x + v * torch.cos(theta) * dt
-    expected_y_next = y + v * torch.sin(theta) * dt
-    expected_theta_next = theta + (v / wheelbase) * torch.tan(angle) * dt
-    expected_v_next = v + accel * dt
-    
-    # Get actual next states from predicted path
-    x_next = predicted_path[:, 0, 1:]      # [B, horizon-1]
-    y_next = predicted_path[:, 1, 1:]
-    theta_next = predicted_path[:, 2, 1:]
-    v_next = predicted_path[:, 3, 1:]
-    
-    # Compute violations (L2 loss)
-    loss_x = torch.mean((x_next - expected_x_next) ** 2)
-    loss_y = torch.mean((y_next - expected_y_next) ** 2)
-    loss_theta = torch.mean((theta_next - expected_theta_next) ** 2)
-    loss_v = torch.mean((v_next - expected_v_next) ** 2)
-    
-    # Optional: Add penalty for violating steering constraints
-    # This encourages the model to stay within physical limits
-    steering_violation = torch.mean(torch.relu(torch.abs(delta) - delta_max_lateral) ** 2)
-    
-    # Total kinematic loss
-    total_loss = loss_x + loss_y + loss_theta + loss_v + 0.1 * steering_violation
-    
-    return total_loss
+         
+
 
 
 local_config = {
@@ -404,13 +268,21 @@ local_config = {
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
+    "dataset_path": "data/dubins_singular",
+    # "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 2,
+    'n_maps': 3,
     'beta_start': 1e-4,
-    'beta_end': 0.02
+    'beta_end': 0.02,
+    'model': {
+        'map_feat_dim': 256,
+        'robot_feat_dim': 128,
+        'time_feat_dim': 64,
+        'num_internal_layers': 5,
+        'base_layer_dim': 128
+    }
 }
 
 def train():
@@ -450,8 +322,7 @@ def train():
     diff = DiffusionManager(timesteps=config.timesteps,beta_start=config.beta_start,beta_end=config.beta_end, device=device)
 
     #TODO only works for squere maps 
-    model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2]).to(device) 
-    
+    model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim']).to(device) 
     # if CONFIG['resume_path'] is not None:
     #     print(f"Loading weights from {CONFIG['resume_path']}...")
     #     weights = torch.load(CONFIG['resume_path'], map_location=CONFIG['device'])
@@ -496,11 +367,14 @@ def train():
                 val_loss += loss.item()
         
         avg_val_loss = val_loss / len(val_loader)
-
-        #TODO is the optimizer needed if so whcih one ? 
+        #             "losses": {
+            #     "train": avg_train_loss,
+            #     "validation": avg_val_loss
+            # },
+    
         scheduler.step(avg_val_loss)
         print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-        wandb.log({"train_loss": avg_train_loss, "val_loss": avg_val_loss, "epoch": epoch})
+        wandb.log({"train_loss": avg_train_loss, "val_loss": avg_val_loss, "epoch": epoch,"learning_rate": optimizer.param_groups[0]['lr']})
         
 
         if epoch % config.visualization_freq == 0:
@@ -632,3 +506,115 @@ def visualize_results(model, diff, dataset, epoch,device):
 
 if __name__ == "__main__":
     train()
+
+
+def kinematic_loss(predicted_path, robot_params, dt=0.01):
+
+    """
+    Compute physics-based kinematic loss for predicted paths.
+    
+    Args:
+        predicted_path: [B, state_dim, horizon] - Model output
+                        Channels: [x, y, theta, v, accel, delta]
+        robot_params: [B, robot_param_dim] - Robot parameters
+                      Indices: [wheelbase, max_velocity, max_steering_at_zero_v, 
+                               max_steering_at_max_v, acceleration, mu_static, width, length]
+        dt: float - Time step (default 0.01)
+    
+    Returns:
+        loss: scalar - Physics violation penalty
+    """
+       # result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
+    # Extract robot parameters (denormalize from [-1, 1])
+    robot_normalization = {
+        "wheelbase": (0.04, 1),
+        "max_velocity": (5, 20),
+        "max_steering_at_zero_v": (-np.pi/2, np.pi/2),
+        "max_steering_at_max_v": (-np.pi/2, np.pi/2),
+        "acceleration": (2, 10),
+        "mu_static": (0.05, 2.5),
+        "width": (0.1, 1),
+        "length": (0.1, 1)
+    }
+    
+    # Denormalize robot params
+    wheelbase = (robot_params[:, 0] + 1) / 2 * (1 - 0.04) + 0.04  # [B]
+    mu_static = (robot_params[:, 5] + 1) / 2 * (2.5 - 0.05) + 0.05  # [B]
+    max_steer_zero_v = (robot_params[:, 2] + 1) / 2 * (np.pi) - np.pi/2  # [B]
+    
+    # Add dimensions for broadcasting: [B, 1]
+    wheelbase = wheelbase.unsqueeze(1)
+    mu_static = mu_static.unsqueeze(1)
+    max_steer_zero_v = max_steer_zero_v.unsqueeze(1)
+    
+    # Extract state variables [B, horizon]
+    # Indices: x=0, y=1, theta=2, v=3, accel=4, delta=5
+    x = predicted_path[:, 0, :-1]      # [B, horizon-1]
+    y = predicted_path[:, 1, :-1]
+    theta = predicted_path[:, 2, :-1]
+    v = predicted_path[:, 3, :-1]
+    accel = predicted_path[:, 4, :-1]
+    delta = predicted_path[:, 5, :-1]
+    
+    # Compute effective steering angle with lateral force limit
+    # At high speeds, lateral force constraint limits turning radius
+    lateral_force_min_v = 0.1  # Minimum velocity for lateral force calculation
+    
+    # Compute angle with lateral force constraint
+    # F_lateral = m * v^2 / r < mu * m * g
+    # r = L / tan(delta) => tan(delta) = L / r
+    # r_min = v^2 / (mu * g)
+    # delta_max = arctan(L / r_min) = arctan(L * mu * g / v^2)
+    
+    g = 9.81
+    # Avoid division by zero at low speeds
+    v_safe = torch.clamp(v, min=lateral_force_min_v)
+    
+    # Maximum steering angle from lateral force constraint
+    delta_max_lateral = torch.atan(wheelbase * mu_static * g / (v_safe ** 2))  # [B, horizon-1]
+    
+    # Apply constraint: use lateral force limit at high speed, mechanical limit at low speed
+    # Use smooth transition based on velocity
+    use_lateral_limit = (v >= lateral_force_min_v).float()
+    
+    # Constrain steering angle
+    delta_constrained = torch.where(
+        v >= lateral_force_min_v,
+        torch.clamp(delta, -delta_max_lateral, delta_max_lateral),  # High speed: lateral force limit
+        torch.clamp(delta, -max_steer_zero_v, max_steer_zero_v)     # Low speed: mechanical limit
+    )
+    
+    # Compute effective angle for dynamics
+    angle = delta_constrained  # Could also use tan approximation for small angles
+    
+    # Expected next states based on bicycle model with constraints
+    # dx/dt = v * cos(theta)
+    # dy/dt = v * sin(theta)
+    # dtheta/dt = (v / L) * tan(delta)  [or simplified: (v / L) * angle]
+    # dv/dt = accel
+    
+    expected_x_next = x + v * torch.cos(theta) * dt
+    expected_y_next = y + v * torch.sin(theta) * dt
+    expected_theta_next = theta + (v / wheelbase) * torch.tan(angle) * dt
+    expected_v_next = v + accel * dt
+    
+    # Get actual next states from predicted path
+    x_next = predicted_path[:, 0, 1:]      # [B, horizon-1]
+    y_next = predicted_path[:, 1, 1:]
+    theta_next = predicted_path[:, 2, 1:]
+    v_next = predicted_path[:, 3, 1:]
+    
+    # Compute violations (L2 loss)
+    loss_x = torch.mean((x_next - expected_x_next) ** 2)
+    loss_y = torch.mean((y_next - expected_y_next) ** 2)
+    loss_theta = torch.mean((theta_next - expected_theta_next) ** 2)
+    loss_v = torch.mean((v_next - expected_v_next) ** 2)
+    
+    # Optional: Add penalty for violating steering constraints
+    # This encourages the model to stay within physical limits
+    steering_violation = torch.mean(torch.relu(torch.abs(delta) - delta_max_lateral) ** 2)
+    
+    # Total kinematic loss
+    total_loss = loss_x + loss_y + loss_theta + loss_v + 0.1 * steering_violation
+    
+    return total_loss

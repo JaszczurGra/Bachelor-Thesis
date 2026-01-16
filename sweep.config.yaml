@@ -1,41 +1,71 @@
-program: model/train.py
-method: bayes  # Bayesian optimization
+program: src_model/train.py
+method: bayes
 metric:
   name: val_loss
   goal: minimize
 
 parameters:
+  # --- Training Parameters to Sweep ---
   lr:
     distribution: log_uniform_values
-    min: 0.00001
-    max: 0.001
+    min: 1.0e-5
+    max: 1.0e-3
   
   batch_size:
-    values: [32, 64, 128,256]
-  
+    values: [64, 128, 256]
+
+  # --- Diffusion Parameters to Sweep ---
   timesteps:
-    values: [500, 1000, 2000]
+    values: [500, 1000]
   
   beta_start:
     distribution: log_uniform_values
-    min: 0.00001
-    max: 0.001
+    min: 1.0e-5
+    max: 1.0e-4
   
   beta_end:
     distribution: uniform
     min: 0.01
     max: 0.05
-  
-  # Fixed parameters
+
+  # --- Nested Model Architecture Parameters ---
+  model:
+    parameters:
+      # You can sweep over different U-Net structures
+      base_layer_dim:
+        values: [64, 128, 256]
+      
+      # You can also sweep over feature dimensions
+      map_feat_dim:
+        values: [128, 256,512]
+      
+      robot_feat_dim:
+        values: [64, 128]
+      
+      time_feat_dim:
+        values: [64,128] # Fixed value
+      num_internal_layers: 
+        values: [3,5,7]
+
+  # --- Fixed Parameters for All Sweep Runs ---
   epochs:
-    value: 100
+    value: 600
   
   dataset_path:
-    value: "data/slurm_10_01_12-01-2026_00:07"
+    value: "slurm_data/dubins_singular"
   
-# Early termination
+  n_maps:
+    value: 10 # Use a larger number of maps for a real sweep
+  
+  checkpoint_freq:
+    value: 300
+  
+  visualization_freq:
+    value: 50
+
+# --- Optional: Early Termination ---
+# This stops unpromising runs early to save compute time.
 early_terminate:
   type: hyperband
-  min_iter: 10
+  min_iter: 50  # A run must complete at least 50 epochs
   eta: 3
-  s: 2
