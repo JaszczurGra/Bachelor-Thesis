@@ -46,6 +46,7 @@ class PathDataset(Dataset):
             # 'delta': (-np.pi/2, np.pi/2),
             # 'accel': (-10, 10)
         }
+        add_dt = False 
         robot_variables = [   "wheelbase", "max_velocity","max_steering_at_zero_v","max_steering_at_max_v","acceleration","mu_static","width","length"]
         
         robot_normalization = {
@@ -111,9 +112,13 @@ class PathDataset(Dataset):
         self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.float32).unsqueeze(1) #(N,H,W)
         #chekc -1 
         self.paths = self.resample_path(self.paths,max(len(p) for p in self.paths) ,path_variables, dt=0.01)
-        self.dts = [p[-1][-1] for p in self.paths]  
+        
+        # self.dts = [p[-1][-1] for p in self.paths]  
+        
         # self.paths = torch.tensor(self.paths).float().permute(0,2,1)  # [N, 128, 7] -> [N, 7, 128]
-        self.paths = torch.tensor(self.paths).float().permute(0,2,1)
+        
+        self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:, :len(path_variables) + (1 if add_dt else 0),: ] 
+        print(self.paths.shape)
         self.paths = 2 * (self.paths - torch.tensor([ [path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1)) / \
                          torch.tensor([ [path_normalization[var][1] - path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1) - 1
         #TODO do robot normalization here instead of in the loop for faster loading 
@@ -191,7 +196,7 @@ class PathDataset(Dataset):
 
             resampled_path_full = np.zeros((target_len, path_np.shape[1]))
 
-            for i in range(path_np.shape[1] - 1): # Loop through x, y, theta, v, accel, delta
+            for i in range(min(path_np.shape[1] - 1, len(path_variables))): # Loop through x, y, theta, v, accel, delta
                 #   path_variables = ['x','y','theta','v','accel','delta']
                 if path_variables[i] == 'theta' or path_variables[i] == 'delta':
                     unwrapped_theta = np.unwrap(path_np[:, i])
@@ -205,8 +210,8 @@ class PathDataset(Dataset):
             if len(path_np[0]) > len(path_variables):
                 resampled_path_full[:, -1] = new_dt
             
-        # TODO make this adapt to normalization params len, and return dt's separately if exist
             resampled_paths.append(resampled_path_full.tolist())
+        
         return resampled_paths
 
     # def vis(self,idx):
@@ -268,10 +273,11 @@ local_config = {
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "dataset_path": "data/dubins_singular",
+    "dataset_path": "slurm_data/singular_path",
+    # "dataset_path": "data/dubins_singular",
     # "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
     "checkpoint_freq": 250,
-    'visualization_freq': 50,
+    'visualization_freq': 30,
     "resume_path": None,
     'n_maps': 3,
     'beta_start': 1e-4,
@@ -387,6 +393,7 @@ def train():
              filename = os.path.join(model_dir, f"model_checkpoint_{epoch+1}.pth")
              torch.save(model.state_dict(), filename)
              print(f"Saved checkpoint: {filename}")
+import math
 
 def simulate_path(path,robot_params, dt=0.01):
     #TODO implement , needs te normalization of the parameters 
@@ -440,8 +447,9 @@ def simulate_path(path,robot_params, dt=0.01):
 
 
 def visualize_results(model, diff, dataset, epoch,device):
-    n = 4 
-    idxs = np.random.choice(len(dataset), size=min(n, len(dataset)), replace=False).astype(int)
+    max_n = 4 
+    idxs = np.random.choice(len(dataset), size=min(max_n, len(dataset)), replace=False).astype(int)
+    n = len(idxs)
     samples = [dataset[i] for i in idxs]
     map_tensor, robot, real_path = [torch.stack(tensors) for tensors in zip(*samples)]
     # map_tensor, robot, real_path = dataset[idx]
@@ -457,8 +465,10 @@ def visualize_results(model, diff, dataset, epoch,device):
     gen_path = generated_path.cpu().numpy()
     real_path = real_path.cpu().numpy()
     map_img = map_tensor.cpu().numpy()
-
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    # set n of subplots to n 
+    fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
     axes = axes.flatten()
     
     for i in range(n):
