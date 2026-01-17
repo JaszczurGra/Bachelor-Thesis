@@ -58,7 +58,7 @@ parameters:
     value: 250
   
   visualization_freq:
-    value: 50
+    value: 100
 
 # --- Optional: Early Termination ---
 # This stops unpromising runs early to save compute time.

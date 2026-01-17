@@ -414,7 +414,7 @@ import math
 
 
 def visualize_results(model, diff, dataset, epoch,device):
-    max_n = 9
+    max_n = 16
     idxs = np.random.choice(len(dataset), size=min(max_n, len(dataset)), replace=False).astype(int)
     n = len(idxs)
     samples = [dataset[i] for i in idxs]
