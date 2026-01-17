@@ -10,20 +10,20 @@ import os
 import glob
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-import wandb  # <--- NEW IMPORT
+import wandb
 
 # Import your model
 from test_model import ConditionalUnet1D
 
 # --- Configuration ---
 CONFIG = {
-    "data_dir": "slurm_data/test_dataset",
+    "data_dir": "slurm_data/test_dataset",  # Root directory containing map_0, map_1, etc.
     "seq_len": 128,
-    "map_size": 64,
-    "batch_size": 16,
-    "epochs": 10000,
+    "map_size": 64,       # Training resolution (efficient)
+    "batch_size": 32,     # Increased batch size is safe with small maps
+    "epochs": 5000,
     "lr": 1e-4,
-    "viz_interval": 500,  # Upload image every N epochs
+    "viz_interval": 100,   # Visualize often to check generalization
     "device": "cuda" if torch.cuda.is_available() else "cpu"
 }
 
@@ -47,32 +47,56 @@ def resample_path(path, target_len):
         new_path[:, dim] = np.interp(idx_new, idx_old, path[:, dim])
     return new_path
 
-# --- 2. Dataset ---
+# --- 2. Dataset (Recursive Multi-Map) ---
 class RobotPathDataset(Dataset):
-    def __init__(self, data_dir, map_size=64, seq_len=128):
-        self.data_dir = data_dir
+    def __init__(self, root_dir, map_size=64, seq_len=128):
         self.seq_len = seq_len
+        self.map_size = map_size
+        self.samples = [] # List of tuples: (json_path, map_path)
+
+        # 1. Walk through root directory looking for map folders
+        if not os.path.exists(root_dir):
+            raise ValueError(f"Data directory {root_dir} does not exist")
+
+        print(f"Scanning {root_dir} for maps and paths...")
         
-        map_path = os.path.join(data_dir, "map.png")
-        if not os.path.exists(map_path):
-            raise ValueError(f"map.png not found in {data_dir}")
+        # Iterate over map_0, map_1, etc.
+        subdirs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, d))])
+        
+        for d in subdirs:
+            folder_path = os.path.join(root_dir, d)
+            map_file = os.path.join(folder_path, "map.png")
             
-        img = cv2.imread(map_path, cv2.IMREAD_GRAYSCALE)
-        if img is None: raise ValueError("Failed to decode map.png")
-        img = cv2.resize(img, (map_size, map_size))
-        self.map_tensor = torch.FloatTensor(img).unsqueeze(0) / 255.0 
-        
-        self.json_files = sorted(glob.glob(os.path.join(data_dir, "path_*.json")))
-        if len(self.json_files) == 0:
-            raise ValueError(f"No path_*.json files found in {data_dir}")
-        print(f"Found {len(self.json_files)} trajectories.")
+            # Skip if no map
+            if not os.path.exists(map_file):
+                continue
+                
+            # Find all json paths in this folder
+            json_files = sorted(glob.glob(os.path.join(folder_path, "*.json")))
+            
+            # Add valid pairs to our list
+            for jf in json_files:
+                self.samples.append((jf, map_file))
+
+        if len(self.samples) == 0:
+            raise ValueError(f"No valid pairs of (map.png, *.json) found in {root_dir}")
+            
+        print(f"Found {len(self.samples)} trajectories across {len(subdirs)} map folders.")
 
     def __len__(self):
-        return len(self.json_files)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        file_path = self.json_files[idx]
-        with open(file_path, 'r') as f:
+        json_path, map_path = self.samples[idx]
+        
+        # A. Load Map (On the fly to save RAM)
+        img = cv2.imread(map_path, cv2.IMREAD_GRAYSCALE)
+        if img is None: raise ValueError(f"Failed to decode {map_path}")
+        img = cv2.resize(img, (self.map_size, self.map_size))
+        map_tensor = torch.FloatTensor(img).unsqueeze(0) / 255.0 
+
+        # B. Load Path & Physics
+        with open(json_path, 'r') as f:
             data = json.load(f)
             
         robot_vec = torch.tensor([
@@ -90,7 +114,11 @@ class RobotPathDataset(Dataset):
         processed_path = (processed_path * 2) - 1 
         path_tensor = torch.FloatTensor(processed_path).transpose(0, 1)
 
-        return path_tensor, self.map_tensor, robot_vec
+        return path_tensor, map_tensor, robot_vec
+
+    # Helper to get raw file paths for visualization
+    def get_paths(self, idx):
+        return self.samples[idx]
 
 # --- 3. Diffusion Scheduler ---
 class DDPMScheduler:
@@ -114,7 +142,7 @@ class DDPMScheduler:
         model.eval()
         with torch.no_grad():
             x = torch.randn(shape).to(CONFIG["device"])
-            # We iterate silently to avoid spamming TQDM logs in WandB console
+            # Iterate silently for visualization
             for i in reversed(range(self.num_timesteps)):
                 t = torch.tensor([i] * shape[0]).to(CONFIG["device"])
                 predicted_noise = model(x, t, map_cond, vec_cond)
@@ -132,52 +160,63 @@ class DDPMScheduler:
 
 # --- 4. Main Training Loop ---
 def train():
-    # --- WandB Init ---
     wandb.init(project="Motion Planning", config=CONFIG)
     
     # 1. Dataset
-    full_dataset = RobotPathDataset(CONFIG["data_dir"], map_size=CONFIG["map_size"], seq_len=CONFIG["seq_len"])
-    
+    try:
+        full_dataset = RobotPathDataset(CONFIG["data_dir"], map_size=CONFIG["map_size"], seq_len=CONFIG["seq_len"])
+    except Exception as e:
+        print(f"Error: {e}")
+        return
+
     # Train/Val Split
-    train_size = int(0.8 * len(full_dataset))
+    train_size = int(0.9 * len(full_dataset)) # 90/10 split
     val_size = len(full_dataset) - train_size
     train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
     
+    print(f"Train samples: {train_size}, Val samples: {val_size}")
+    
     train_loader = DataLoader(train_ds, batch_size=CONFIG["batch_size"], shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=CONFIG["batch_size"], shuffle=False)
+    # Drop last to avoid batch-norm errors on tiny leftovers
+    val_loader = DataLoader(val_ds, batch_size=CONFIG["batch_size"], shuffle=False, drop_last=False)
     
     # 2. Setup
     model = ConditionalUnet1D(input_dim=7, cond_dim=6, channels=64).to(CONFIG["device"])
     scheduler = DDPMScheduler(num_timesteps=1000)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG["lr"])
     loss_fn = nn.MSELoss()
+    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=50)
 
-    # --- Pre-Select Fixed Samples for Visualization ---
-    # We grab 4 fixed samples from validation set to track progress over time
-    # This creates a consistent "Timelapse" in WandB
+    # --- Pre-Select Visualization Batch ---
+    # We select 4 fixed validation samples.
+    # CRITICAL: We must retrieve the High-Res maps for these specific samples.
     print("Preparing visualization batch...")
-    vis_indices = torch.linspace(0, len(val_ds)-1, steps=4).long()
-    vis_batch_maps = []
-    vis_batch_conds = []
-    vis_gt_paths = []
+    num_viz = min(4, val_size)
+    vis_indices = torch.linspace(0, val_size-1, steps=num_viz).long()
     
+    vis_data_store = [] # Stores (MapTensor, CondTensor, GT_Numpy, HighResMap_Numpy)
+
     for idx in vis_indices:
-        p, m, c = val_ds[idx]
-        vis_batch_maps.append(m)
-        vis_batch_conds.append(c)
-        vis_gt_paths.append(p.numpy()) # Store as numpy for plotting later
+        # Get Tensor Data
+        path_T, map_T, cond_T = val_ds[idx]
+        
+        # Get Original Index to find File Path
+        original_idx = val_ds.indices[idx]
+        _, map_path_str = full_dataset.get_paths(original_idx)
+        
+        # Load High Res Map
+        high_res = cv2.imread(map_path_str, cv2.IMREAD_GRAYSCALE)
+        high_res = np.flipud(high_res) # Plotting convention
+        
+        vis_data_store.append({
+            "map_T": map_T,
+            "cond_T": cond_T,
+            "gt_np": (path_T.numpy() + 1) / 2 * 15.0, # Denormalize GT
+            "high_res": high_res
+        })
 
-    # Stack for efficient batch inference
-    vis_tensor_maps = torch.stack(vis_batch_maps).to(CONFIG["device"])
-    vis_tensor_conds = torch.stack(vis_batch_conds).to(CONFIG["device"])
-    
-    # Load High-Res Map for Plotting background
-    high_res_map = cv2.imread(os.path.join(CONFIG["data_dir"], "map.png"), cv2.IMREAD_GRAYSCALE)
-    high_res_map = np.flipud(high_res_map)
-
-    print(f"Starting Training on {CONFIG['device']}...")
-    
     # 3. Training Loop
+    print(f"Starting Training on {CONFIG['device']}...")
     for epoch in range(CONFIG["epochs"]):
         model.train()
         epoch_train_loss = 0
@@ -197,61 +236,60 @@ def train():
             
             epoch_train_loss += loss.item()
         
-        # Log Train Metrics
         avg_train_loss = epoch_train_loss / len(train_loader)
-        current_lr = optimizer.param_groups[0]['lr']
+
+        # Validation (Every epoch for smooth graphs)
+        model.eval()
+        val_loss_acc = 0
+        with torch.no_grad():
+            for paths, maps, conds in val_loader:
+                paths, maps, conds = paths.to(CONFIG["device"]), maps.to(CONFIG["device"]), conds.to(CONFIG["device"])
+                t = torch.randint(0, scheduler.num_timesteps, (paths.shape[0],)).to(CONFIG["device"])
+                noisy_paths, noise = scheduler.add_noise(paths, t)
+                noise_pred = model(noisy_paths, t, maps, conds)
+                val_loss_acc += loss_fn(noise_pred, noise).item()
+        
+        avg_val_loss = val_loss_acc / max(len(val_loader), 1)
+        lr_scheduler.step(avg_val_loss)
+        
         wandb.log({
             "train_loss": avg_train_loss, 
-            "learning_rate": current_lr,
+            "val_loss": avg_val_loss,
+            "lr": optimizer.param_groups[0]['lr'],
             "epoch": epoch
         })
 
-        # --- Validation Loop (Every 10 Epochs) ---
-        if epoch % 10 == 0:
-            model.eval()
-            val_loss_acc = 0
-            with torch.no_grad():
-                for paths, maps, conds in val_loader:
-                    paths, maps, conds = paths.to(CONFIG["device"]), maps.to(CONFIG["device"]), conds.to(CONFIG["device"])
-                    t = torch.randint(0, scheduler.num_timesteps, (paths.shape[0],)).to(CONFIG["device"])
-                    noisy_paths, noise = scheduler.add_noise(paths, t)
-                    noise_pred = model(noisy_paths, t, maps, conds)
-                    val_loss_acc += loss_fn(noise_pred, noise).item()
-            
-            avg_val_loss = val_loss_acc / len(val_loader)
-            wandb.log({"val_loss": avg_val_loss, "epoch": epoch})
-            
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch} | Train: {avg_train_loss:.5f} | Val: {avg_val_loss:.5f}")
+        if epoch % 50 == 0:
+            print(f"Epoch {epoch} | Train: {avg_train_loss:.5f} | Val: {avg_val_loss:.5f}")
 
-        # --- Visualization Loop (Every N Epochs) ---
+        # --- Visualization ---
         if epoch % CONFIG["viz_interval"] == 0:
-            print(f"Generating visualization for epoch {epoch}...")
+            print(f"Generating visualization...")
             
-            # Run inference on our fixed batch
-            gen_batch = scheduler.sample(model, vis_tensor_maps, vis_tensor_conds, (4, 7, CONFIG["seq_len"]))
+            # Construct Batch
+            batch_maps = torch.stack([d["map_T"] for d in vis_data_store]).to(CONFIG["device"])
+            batch_conds = torch.stack([d["cond_T"] for d in vis_data_store]).to(CONFIG["device"])
             
-            # Create Plot
+            # Inference
+            gen_batch = scheduler.sample(model, batch_maps, batch_conds, (len(vis_data_store), 7, CONFIG["seq_len"]))
+            
+            # Plot
             fig, axes = plt.subplots(2, 2, figsize=(15, 15))
             axes = axes.flatten()
             
-            for i in range(4):
+            for i, data in enumerate(vis_data_store):
                 ax = axes[i]
                 
-                # Ground Truth
-                gt_path = vis_gt_paths[i]
-                gt_path = (gt_path + 1) / 2 * 15.0
-                
-                # Generated
-                raw_path = gen_batch[i].squeeze().cpu().numpy()
-                raw_path = (raw_path + 1) / 2 * 15.0
-                smooth_p = smooth_path(raw_path)
+                # Get generated path
+                raw = gen_batch[i].squeeze().cpu().numpy()
+                raw = (raw + 1) / 2 * 15.0
+                smooth = smooth_path(raw)
                 
                 # Plot
-                ax.imshow(high_res_map, cmap='gray', extent=[0, 15, 0, 15], origin='lower', alpha=0.5, zorder=0)
-                ax.plot(gt_path[0, :], gt_path[1, :], label='Ground Truth', color='blue', linewidth=3, zorder=5)
-                ax.plot(raw_path[0, :], raw_path[1, :], color='red', linestyle='--', alpha=0.3, zorder=6)
-                ax.plot(smooth_p[0, :], smooth_p[1, :], label='Inference', color='red', linewidth=3, zorder=10)
+                ax.imshow(data["high_res"], cmap='gray', extent=[0, 15, 0, 15], origin='lower', alpha=0.5, zorder=0)
+                ax.plot(data["gt_np"][0, :], data["gt_np"][1, :], label='GT', color='blue', linewidth=3, zorder=5)
+                ax.plot(raw[0, :], raw[1, :], color='red', linestyle='--', alpha=0.3, zorder=6)
+                ax.plot(smooth[0, :], smooth[1, :], label='Pred', color='red', linewidth=3, zorder=10)
                 
                 ax.set_xlim(0, 15); ax.set_ylim(0, 15)
                 ax.set_title(f"Val Sample {i}")
@@ -259,14 +297,9 @@ def train():
 
             plt.suptitle(f"Epoch {epoch}", fontsize=16)
             plt.tight_layout()
-            
-            # Upload to WandB
-            wandb.log({"Inference Samples": wandb.Image(fig), "epoch": epoch})
-            
-            # Close figure to prevent memory leak
+            wandb.log({"Inference": wandb.Image(fig)})
             plt.close(fig)
 
-    # Finish run
     wandb.finish()
 
 if __name__ == "__main__":
