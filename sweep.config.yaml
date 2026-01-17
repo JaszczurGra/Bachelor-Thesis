@@ -64,5 +64,5 @@ parameters:
 # This stops unpromising runs early to save compute time.
 early_terminate:
   type: hyperband
-  min_iter: 300  # A run must complete at least 200 epochs
-  eta: 3
+  min_iter: 300 
+  eta: 2

@@ -15,7 +15,7 @@ echo "Sweep ID: $SWEEP_ID"
 
 # Wave 1: Fast exploration (10 agents, 3 hours)
 echo "Launching Wave 1: Fast exploration"
-sbatch --array=0-2 --time=0-15:00:00 <<EOF
+sbatch --array=0-5 --time=0-12:00:00 <<EOF
 #!/bin/bash
 #SBATCH --job-name=diffusion_planning_sweep
 #SBATCH --output=log/diffusion_planning_sweep_%A_%a.out
