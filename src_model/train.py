@@ -4,8 +4,11 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import wandb
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from model import DiffusionDenoiser
+from test_model import ConditionalUnet1D
 import os 
 from PIL import Image
 from scipy.interpolate import CubicSpline
@@ -77,7 +80,7 @@ class PathDataset(Dataset):
                 continue
             
 
-            map_tensor = np.array(Image.open(map_file).convert('1'))[::-1,:]  # Invert Y-axis to match coordinate system
+            map_tensor = np.array(Image.open(map_file).resize((64, 64), Image.Resampling.LANCZOS).convert('1'))[::-1,:]  # Invert Y-axis to match coordinate system
             
             path_files = [f for f in os.listdir(map_folder) if f.endswith('.json')]
             for path_file in path_files:
@@ -111,7 +114,8 @@ class PathDataset(Dataset):
         #TODO can this acieve full speed on bools? > maps can't be bool as the convolution needs float 
         self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.float32).unsqueeze(1) #(N,H,W)
         #chekc -1 
-        self.paths = self.resample_path(self.paths,max(len(p) for p in self.paths) ,path_variables, dt=0.01)
+        self.paths = self.resample_path(self.paths,128 ,path_variables, dt=0.01)
+        # self.paths = self.resample_path(self.paths,max(len(p) for p in self.paths) ,path_variables, dt=0.01)
         
         # self.dts = [p[-1][-1] for p in self.paths]  
         
@@ -269,23 +273,23 @@ class DiffusionManager:
 local_config = {
     # batch size = 64 - approximately 5GB vram
     "epochs": 2500,
-    "batch_size": 64,
+    "batch_size": 64 * 4,
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "dataset_path": "slurm_data/singular_path",
+    # "dataset_path": "slurm_data/singular_path",
     # "dataset_path": "data/dubins_singular",
-    # "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
+    "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
     "checkpoint_freq": 250,
-    'visualization_freq': 30,
+    'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 3,
+    'n_maps': 400,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
-        'map_feat_dim': 256,
+        'map_feat_dim': 256 ,
         'robot_feat_dim': 128,
-        'time_feat_dim': 64,
+        'time_feat_dim': 256, # 4* base layer?
         'num_internal_layers': 5,
         'base_layer_dim': 128
     }
@@ -329,6 +333,7 @@ def train():
 
     #TODO only works for squere maps 
     model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim']).to(device) 
+    # model = ConditionalUnet1D(input_dim=dataset.path_dim,cond_dim=dataset.robot_dim ).to(device)
     # if CONFIG['resume_path'] is not None:
     #     print(f"Loading weights from {CONFIG['resume_path']}...")
     #     weights = torch.load(CONFIG['resume_path'], map_location=CONFIG['device'])
@@ -336,12 +341,18 @@ def train():
     #     print("Resuming training from checkpoint!")
 
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10)
-  
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.7, patience=20)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs, eta_min=0)
+    #State of the art up and then down 
+    #   scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.001, total_steps=len(train_loader) * config.epochs)
     criterion = torch.nn.MSELoss()
     
     print(f"Starting Training on {device}...")
-    
+    run_name = wandb.run.name or f"run-{wandb.run.id}"
+    model_dir = os.path.join("models", run_name)
+    os.makedirs(model_dir, exist_ok=True)
+    best_val_loss = float('inf')    
+    best_model_path = "best_model_checkpoint.pth"
     for epoch in range(config.epochs):
         model.train()
         train_loss = 0
@@ -373,81 +384,48 @@ def train():
                 val_loss += loss.item()
         
         avg_val_loss = val_loss / len(val_loader)
+
+
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            torch.save(model.state_dict(), os.path.join(model_dir, best_model_path))
+            print(f"\nNew best model saved with val_loss: {best_val_loss:.4f}")
+
         #             "losses": {
             #     "train": avg_train_loss,
             #     "validation": avg_val_loss
             # },
     
-        scheduler.step(avg_val_loss)
-        print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-        wandb.log({"train_loss": avg_train_loss, "val_loss": avg_val_loss, "epoch": epoch,"learning_rate": optimizer.param_groups[0]['lr']})
+        # scheduler.step(avg_val_loss)
+        scheduler.step()
+        print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}", end='\r')
+        wandb.log({"train_loss": avg_train_loss,"best_val_loss": best_val_loss, "val_loss": avg_val_loss, "epoch": epoch,"learning_rate": optimizer.param_groups[0]['lr']})
         
 
-        if epoch % config.visualization_freq == 0:
-            visualize_results(model, diff, val_dataset, epoch,device)
-            
+
         if (epoch + 1) % config.checkpoint_freq == 0:
-             run_name = wandb.run.name or f"run-{wandb.run.id}"
-             model_dir = os.path.join("models", run_name)
-             os.makedirs(model_dir, exist_ok=True)
              filename = os.path.join(model_dir, f"model_checkpoint_{epoch+1}.pth")
              torch.save(model.state_dict(), filename)
              print(f"Saved checkpoint: {filename}")
+
+
+        if epoch % config.visualization_freq == 0:
+            vis_model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim'], verbose=False).to(device)
+            if os.path.exists(best_model_path):
+                vis_model.load_state_dict(torch.load(best_model_path))
+            else: # Fallback for the first visualization before any model is saved
+                vis_model.load_state_dict(model.state_dict())
+            
+            visualize_results(vis_model, diff, val_dataset, epoch, device)
+            
 import math
 
-def simulate_path(path,robot_params, dt=0.01):
-    #TODO implement , needs te normalization of the parameters 
-    import math 
-    
-    robot_normalization = {
-    "wheelbase": (0.04,1),
-    "max_velocity": (5,20),
-    "max_steering_at_zero_v": (-np.pi/2, np.pi/2),
-    "max_steering_at_max_v": (-np.pi/2, np.pi/2),
-    "acceleration": (2, 10),
-    "mu_static": (0.05, 2.5),
-    "width": (0.1, 1),
-    "length": (0.1, 1)
-    }
-    robot_params = {key: val for key, val in zip(robot_normalization.keys(), robot_params)}
-    _lateral_force_min_v = math.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / math.tan(robot_params["max_steering_at_zero_v"]) ) 
-    result = [path[0]]
-    def propagate(state, control, result):
-     
-        """
-        State: [x, y, theta, v]
-        Control: [acceleration, steering_angle]
-        F_l= mvv/r < mu * g 
-        """
-        angle = math.copysign(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / state[3]**2, control[1])  if state[3] >= _lateral_force_min_v else math.tan(np.clip(control[1], -robot_params["max_steering_at_zero_v"], robot_params["max_steering_at_zero_v"]))
-        # self._debug_counter += 1
-        # if self._debug_counter % 100 == 0:
-        #     print(angle, math.atan(angle) * 180/math.pi)
-            # print(self._debug_counter / 1000000 , 'MIL propagation steps')
-        result[0] =  state[3] * math.cos(state[2])  
-        result[1] = state[3] * math.sin(state[2])  
-        # result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
-        result[2] = (state[3] / robot_params["wheelbase"]) *  angle 
-        result[3] = control[0]
-
-    for i in range(1, len(path)-1):
-        state = result[-1][:4]  # [x, y, theta, v]
-        control = path[i][4:6]  # [acceleration, delta]
-        next_state = [0, 0, 0, 0]
-        propagate(state, control, next_state)
-        new_x = state[0] + next_state[0] * dt
-        new_y = state[1] + next_state[1] * dt
-        new_theta = state[2] + next_state[2] * dt
-        new_v = state[3] + next_state[3] * dt
-        result.append([new_x, new_y, new_theta, new_v] + path[i][4:].tolist())
-
-    return path
 
 
 
 
 def visualize_results(model, diff, dataset, epoch,device):
-    max_n = 4 
+    max_n = 9
     idxs = np.random.choice(len(dataset), size=min(max_n, len(dataset)), replace=False).astype(int)
     n = len(idxs)
     samples = [dataset[i] for i in idxs]
@@ -460,17 +438,17 @@ def visualize_results(model, diff, dataset, epoch,device):
 
 
     generated_path = diff.sample(model, map_tensor,robot, real_path).squeeze(0) 
+    generated_path = generated_path if n > 1 else generated_path.unsqueeze(0)
+    gen_path = generated_path.cpu().numpy() 
 
-
-    gen_path = generated_path.cpu().numpy()
     real_path = real_path.cpu().numpy()
     map_img = map_tensor.cpu().numpy()
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
     # set n of subplots to n 
     fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
-    axes = axes.flatten()
-    
+    axes = axes.flatten() if n > 1 else [axes]
+
     for i in range(n):
         ax = axes[i]
         ax.imshow(map_img[i,0], cmap='gray', extent=[-1, 1, -1, 1], origin='lower')
@@ -498,7 +476,6 @@ def visualize_results(model, diff, dataset, epoch,device):
         # rotated_corners[:, 1] += robot_y
 
         # ax.plot(rotated_corners[:, 0], rotated_corners[:, 1], 'b-', linewidth=2, label='Robot')
-
         ax.plot(gen_path[i,0,:], gen_path[i,1,:], 'r-', linewidth=2, label='Diffusion')
 
         # simulated_path = simulate_path(generated_path[i], robot[i].cpu().numpy(), dt=0.01)
@@ -519,6 +496,7 @@ if __name__ == "__main__":
 
 
 def kinematic_loss(predicted_path, robot_params, dt=0.01):
+    
 
     """
     Compute physics-based kinematic loss for predicted paths.
@@ -628,3 +606,50 @@ def kinematic_loss(predicted_path, robot_params, dt=0.01):
     total_loss = loss_x + loss_y + loss_theta + loss_v + 0.1 * steering_violation
     
     return total_loss
+def simulate_path(path,robot_params, dt=0.01):
+    #TODO implement , needs te normalization of the parameters 
+    import math 
+    
+    robot_normalization = {
+    "wheelbase": (0.04,1),
+    "max_velocity": (5,20),
+    "max_steering_at_zero_v": (-np.pi/2, np.pi/2),
+    "max_steering_at_max_v": (-np.pi/2, np.pi/2),
+    "acceleration": (2, 10),
+    "mu_static": (0.05, 2.5),
+    "width": (0.1, 1),
+    "length": (0.1, 1)
+    }
+    robot_params = {key: val for key, val in zip(robot_normalization.keys(), robot_params)}
+    _lateral_force_min_v = math.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / math.tan(robot_params["max_steering_at_zero_v"]) ) 
+    result = [path[0]]
+    def propagate(state, control, result):
+     
+        """
+        State: [x, y, theta, v]
+        Control: [acceleration, steering_angle]
+        F_l= mvv/r < mu * g 
+        """
+        angle = math.copysign(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / state[3]**2, control[1])  if state[3] >= _lateral_force_min_v else math.tan(np.clip(control[1], -robot_params["max_steering_at_zero_v"], robot_params["max_steering_at_zero_v"]))
+        # self._debug_counter += 1
+        # if self._debug_counter % 100 == 0:
+        #     print(angle, math.atan(angle) * 180/math.pi)
+            # print(self._debug_counter / 1000000 , 'MIL propagation steps')
+        result[0] =  state[3] * math.cos(state[2])  
+        result[1] = state[3] * math.sin(state[2])  
+        # result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
+        result[2] = (state[3] / robot_params["wheelbase"]) *  angle 
+        result[3] = control[0]
+
+    for i in range(1, len(path)-1):
+        state = result[-1][:4]  # [x, y, theta, v]
+        control = path[i][4:6]  # [acceleration, delta]
+        next_state = [0, 0, 0, 0]
+        propagate(state, control, next_state)
+        new_x = state[0] + next_state[0] * dt
+        new_y = state[1] + next_state[1] * dt
+        new_theta = state[2] + next_state[2] * dt
+        new_v = state[3] + next_state[3] * dt
+        result.append([new_x, new_y, new_theta, new_v] + path[i][4:].tolist())
+
+    return path

@@ -3,6 +3,20 @@ import torch.nn as nn
 import math
 
 
+class SinusoidalPosEmb(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        device = x.device
+        half_dim = self.dim // 2
+        emb = math.log(10000) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = x[:, None] * emb[None, :]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        return emb
+
 class ResnetBlock1D(nn.Module):
     def __init__(self, in_channels, out_channels, cond_dim):
         super().__init__()
@@ -54,16 +68,13 @@ class ResnetBlock1D(nn.Module):
 class DiffusionDenoiser(nn.Module):
 
     #TODO proper sizes for robot and state dim either remove unimportant or set the size for all of them  
-    def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128):
+    def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128,verbose=True):
         super().__init__()
-        print('Initializing DiffusionDenoiser with state_dim:', state_dim, 'robot_param_dim:', robot_param_dim, 'map_size:', map_size)
-        print('Feature dims - map:', map_feat_dim, 'robot:', robot_feat_dim, 'time:', time_feat_dim)
-        print('Network depth:', num_internal_layers, 'base layer dim:', base_layer_dim)
-        #TODO should be settable 
-        #map_feature_dim ,robot_feat_dim ,robot_feat_dim
-        #128 nr of nodes per layer 
-        # 4 layers (2 internal layers)
-        # 1. Map Encoder
+        if verbose:
+            print('Initializing DiffusionDenoiser with state_dim:', state_dim, 'robot_param_dim:', robot_param_dim, 'map_size:', map_size)
+            print('Feature dims - map:', map_feat_dim, 'robot:', robot_feat_dim, 'time:', time_feat_dim)
+            print('Network depth:', num_internal_layers, 'base layer dim:', base_layer_dim)
+    # 1. Map Encoder (CNN)
         self.map_cnn = nn.Sequential(
             nn.Conv2d(1, 16, 3, stride=2, padding=1), # Output: 32x32
             nn.ReLU(),
@@ -82,10 +93,17 @@ class DiffusionDenoiser(nn.Module):
         )
 
         # 3. Time Embedding (Standard for Diffusion)
+        # self.time_mlp = nn.Sequential(
+        #     nn.Linear(1, 64),
+        #     nn.ReLU(),
+        #     nn.Linear(64, time_feat_dim)
+        # )
+
         self.time_mlp = nn.Sequential(
-            nn.Linear(1, 64),
-            nn.ReLU(),
-            nn.Linear(64, time_feat_dim)
+            SinusoidalPosEmb(base_layer_dim),
+            nn.Linear(base_layer_dim, time_feat_dim),
+            nn.GELU(),
+            nn.Linear(time_feat_dim, time_feat_dim),
         )
 
         # Combined Condition Dim
@@ -149,7 +167,7 @@ class DiffusionDenoiser(nn.Module):
         
         m_feat = self.map_cnn(map_img)
         p_feat = self.param_mlp(robot_params)
-        t_feat = self.time_mlp(t.unsqueeze(-1).float())
+        t_feat = self.time_mlp(t.float())
         
         combined_cond = torch.cat([m_feat, p_feat, t_feat], dim=1)
 
