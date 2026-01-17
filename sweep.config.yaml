@@ -8,11 +8,12 @@ parameters:
   # --- Training Parameters to Sweep ---
   lr:
     distribution: log_uniform_values
-    min: 1.0e-5
+    min: 1.0e-4
     max: 1.0e-3
   
   batch_size:
-    values: [64, 128, 256]
+    batch_size:
+      values: [1024, 512, 256, 128]
 
   # --- Diffusion Parameters to Sweep ---
   timesteps:
@@ -28,37 +29,33 @@ parameters:
     min: 0.01
     max: 0.05
 
-  # --- Nested Model Architecture Parameters ---
   model:
     parameters:
-      # You can sweep over different U-Net structures
       base_layer_dim:
-        values: [64, 128, 256]
+        values: [64, 128, 256,512]
       
-      # You can also sweep over feature dimensions
       map_feat_dim:
-        values: [128, 256,512]
+        values: [128, 256,512,1024]
       
       robot_feat_dim:
-        values: [64, 128]
+        values: [64, 128,256,512]
       
       time_feat_dim:
-        values: [64,128] # Fixed value
+        value: None # Fixed value
       num_internal_layers: 
-        values: [3,5,7]
+        values: [3,4,5,6,7]
 
-  # --- Fixed Parameters for All Sweep Runs ---
   epochs:
-    value: 600
+    value: 1500
   
   dataset_path:
-    value: "slurm_data/dubins_singular"
+    value: "slurm_data/slurm_10_01_12-01-2026_00:07"
   
   n_maps:
-    value: 10 # Use a larger number of maps for a real sweep
+    value: 400
   
   checkpoint_freq:
-    value: 300
+    value: 250
   
   visualization_freq:
     value: 50
@@ -67,5 +64,5 @@ parameters:
 # This stops unpromising runs early to save compute time.
 early_terminate:
   type: hyperband
-  min_iter: 50  # A run must complete at least 50 epochs
+  min_iter: 300  # A run must complete at least 200 epochs
   eta: 3

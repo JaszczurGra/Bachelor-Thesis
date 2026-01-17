@@ -70,6 +70,9 @@ class DiffusionDenoiser(nn.Module):
     #TODO proper sizes for robot and state dim either remove unimportant or set the size for all of them  
     def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128,verbose=True):
         super().__init__()
+        if time_feat_dim is None:
+            time_feat_dim = base_layer_dim * 4 
+
         if verbose:
             print('Initializing DiffusionDenoiser with state_dim:', state_dim, 'robot_param_dim:', robot_param_dim, 'map_size:', map_size)
             print('Feature dims - map:', map_feat_dim, 'robot:', robot_feat_dim, 'time:', time_feat_dim)

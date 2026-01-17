@@ -12,30 +12,16 @@ from test_model import ConditionalUnet1D
 import os 
 from PIL import Image
 from scipy.interpolate import CubicSpline
-# --- Configuration ---
-# CONFIG = {
-#     "epochs": 2500,
-#     "batch_size": 64,
-#     "lr": 1e-4,
-#     "timesteps": 1000,
-#     "device": "cuda" if torch.cuda.is_available() else "cpu",
-#     "dataset_path": "data/slurm_10_01_12-01-2026_00:07",
-#     # snappy_porcupine_2026-01-02_19:13
-#     "checkpoint_freq": 250,
-#     "resume_path": None
-# }
 
-#TODO interpolation of path to same length around 5k rn 
-#Is there a split for train validate 
-#How to set up the values in model ?? 
  
+ #TODO visualize on high quality map 
 
  #TODO robot always starts in the same positions we should train it on multiple start,goal positions, shouldnt it be included somewhere in params nontheles???
 
 #TODO combine with visualizer.py from dataset gen for more accurate reconstruction
-# --- Dataset Class with Augmentation ---
+
 class PathDataset(Dataset):
-    def __init__(self, path, n_maps):
+    def __init__(self, path, n_maps, map_resolution,path_length=256):
         print(f"Loading data from {path}...")
 
         
@@ -80,7 +66,7 @@ class PathDataset(Dataset):
                 continue
             
 
-            map_tensor = np.array(Image.open(map_file).resize((64, 64), Image.Resampling.LANCZOS).convert('1'))[::-1,:]  # Invert Y-axis to match coordinate system
+            map_tensor = np.array(Image.open(map_file).resize((int(map_resolution), int(map_resolution)), Image.Resampling.LANCZOS).convert('1'))[::-1,:]  # Invert Y-axis to match coordinate system
             
             path_files = [f for f in os.listdir(map_folder) if f.endswith('.json')]
             for path_file in path_files:
@@ -114,8 +100,9 @@ class PathDataset(Dataset):
         #TODO can this acieve full speed on bools? > maps can't be bool as the convolution needs float 
         self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.float32).unsqueeze(1) #(N,H,W)
         #chekc -1 
-        self.paths = self.resample_path(self.paths,128 ,path_variables, dt=0.01)
-        # self.paths = self.resample_path(self.paths,max(len(p) for p in self.paths) ,path_variables, dt=0.01)
+    
+        path_length = max(len(p) for p in self.paths) if path_length is None else path_length
+        self.paths = self.resample_path(self.paths,path_length ,path_variables, dt=0.01)
         
         # self.dts = [p[-1][-1] for p in self.paths]  
         
@@ -273,7 +260,7 @@ class DiffusionManager:
 local_config = {
     # batch size = 64 - approximately 5GB vram
     "epochs": 2500,
-    "batch_size": 64 * 4,
+    "batch_size": 512 ,
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -290,9 +277,11 @@ local_config = {
         'map_feat_dim': 256 ,
         'robot_feat_dim': 128,
         'time_feat_dim': 256, # 4* base layer?
-        'num_internal_layers': 5,
+        'num_internal_layers': 3,
         'base_layer_dim': 128
-    }
+    },
+    'map_resolution': 128,
+    'path_length': 256
 }
 
 def train():
@@ -303,7 +292,7 @@ def train():
     device = config.device
 
 
-    dataset = PathDataset(config.dataset_path,config.n_maps)
+    dataset = PathDataset(config.dataset_path,config.n_maps, config.map_resolution,config.path_length)
 
 
     train_size = int(0.8 * len(dataset))
