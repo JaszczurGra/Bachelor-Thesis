@@ -30,10 +30,10 @@ class PathDataset(Dataset):
         path_normalization = {
             'x': (0,15),
             'y': (0,15),
-            'theta': (-np.pi, np.pi)#,
-            # 'v': (0,20),
-            # 'delta': (-np.pi/2, np.pi/2),
-            # 'accel': (-10, 10)
+            'theta': (-np.pi, np.pi),
+            'v': (0,20),
+            'delta': (-np.pi/2, np.pi/2),
+            'accel': (-10, 10)
         }
         add_dt = False 
         robot_variables = [   "wheelbase", "max_velocity","max_steering_at_zero_v","max_steering_at_max_v","acceleration","mu_static","width","length"]
@@ -46,7 +46,7 @@ class PathDataset(Dataset):
         "acceleration": (2, 10),
         "mu_static": (0.05, 2.5),
         "width": (0.1, 1),
-        "length": (0.1, 1)
+        "length": (0.1, 1),
         }
 
         self.maps = []
@@ -104,17 +104,24 @@ class PathDataset(Dataset):
         path_length = max(len(p) for p in self.paths) if path_length is None else path_length
         self.paths = self.resample_path(self.paths,path_length ,path_variables, dt=0.01)
         
-        # self.dts = [p[-1][-1] for p in self.paths]  
-        
+
+
         # self.paths = torch.tensor(self.paths).float().permute(0,2,1)  # [N, 128, 7] -> [N, 7, 128]
         
         self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:, :len(path_variables) + (1 if add_dt else 0),: ] 
-        print(self.paths.shape)
+        
         self.paths = 2 * (self.paths - torch.tensor([ [path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1)) / \
                          torch.tensor([ [path_normalization[var][1] - path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1) - 1
         #TODO do robot normalization here instead of in the loop for faster loading 
+        
         self.robots = torch.tensor(self.robots)
-
+       
+        self.dts = torch.tensor([p[-1][-1] for p in self.paths] ) 
+        self.dts = (self.dts / 0.25 - 0.5) * 2  # Normalize dt to [-1, 1]
+        print(f"Dts min:{min(self.dts)},max:{max(self.dts)}")
+        
+        
+        self.robots = torch.cat([self.robots, self.dts.unsqueeze(1)], dim=1)  # Append dt to robot parameters
         self.robot_dim = self.robots.shape[1]
         self.path_dim = self.paths.shape[1]
         #TODO do wee need that?  f.e only flip verticaly ?  
@@ -260,7 +267,7 @@ class DiffusionManager:
 local_config = {
     # batch size = 64 - approximately 5GB vram
     "epochs": 2500,
-    "batch_size": 512 ,
+    "batch_size": 16 ,
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -270,7 +277,7 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 400,
+    'n_maps': 10,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
@@ -444,27 +451,27 @@ def visualize_results(model, diff, dataset, epoch,device):
         ax.plot(real_path[i,0,:], real_path[i,1,:], 'g--', linewidth=2, label='GT')
 
         #TODO add plotting of the robot at start position of gt and generated path 
-        # robot_x, robot_y = real_path[i, 0, 0], real_path[i, 1, 0]
-        # robot_theta = real_path[i, 2, 0]
-        # robot_width = (robot[i, 6].item() + 1) / 2 * (1 - 0.1) + 0.1
-        # robot_length = (robot[i, 7].item() + 1) / 2 * (1 - 0.1) + 0.1
+        robot_x, robot_y = real_path[i, 0, 0], real_path[i, 1, 0]
+        robot_theta = real_path[i, 2, 0]
+        robot_width = ((robot[i, 6].item() + 1) / 2 * (1 - 0.1) + 0.1) / 15
+        robot_length = ((robot[i, 7].item() + 1) / 2 * (1 - 0.1) + 0.1) / 15
 
-        # corners = np.array([
-        #     [-robot_length/2, -robot_width/2],
-        #     [robot_length/2, -robot_width/2],
-        #     [robot_length/2, robot_width/2],
-        #     [-robot_length/2, robot_width/2],
-        #     [-robot_length/2, -robot_width/2]
-        # ])
+        corners = np.array([
+            [-robot_length/2, -robot_width/2],
+            [robot_length/2, -robot_width/2],
+            [robot_length/2, robot_width/2],
+            [-robot_length/2, robot_width/2],
+            [-robot_length/2, -robot_width/2]
+        ])
 
-        # cos_theta = np.cos(robot_theta)
-        # sin_theta = np.sin(robot_theta)
-        # rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
-        # rotated_corners = corners @ rotation_matrix.T
-        # rotated_corners[:, 0] += robot_x
-        # rotated_corners[:, 1] += robot_y
+        cos_theta = np.cos(robot_theta)
+        sin_theta = np.sin(robot_theta)
+        rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+        rotated_corners = corners @ rotation_matrix.T
+        rotated_corners[:, 0] += robot_x
+        rotated_corners[:, 1] += robot_y
 
-        # ax.plot(rotated_corners[:, 0], rotated_corners[:, 1], 'b-', linewidth=2, label='Robot')
+        ax.plot(rotated_corners[:, 0], rotated_corners[:, 1], 'b-', linewidth=2, label='Robot')
         ax.plot(gen_path[i,0,:], gen_path[i,1,:], 'r-', linewidth=2, label='Diffusion')
 
         # simulated_path = simulate_path(generated_path[i], robot[i].cpu().numpy(), dt=0.01)

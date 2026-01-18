@@ -31,7 +31,7 @@ parameters:
   model:
     parameters:
       base_layer_dim:
-        value: 64
+        values: [64,128]
       
       map_feat_dim:
         values: [256,512]
