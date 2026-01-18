@@ -48,6 +48,7 @@ class PathDataset(Dataset):
         "mu_static": (0.05, 2.5),
         "width": (0.1, 1),
         "length": (0.1, 1),
+        # "dt": (0, 60)
         }
 
         self.maps = []
@@ -289,7 +290,8 @@ local_config = {
         'base_layer_dim': 128
     },
     'map_resolution': 128,
-    'path_length': 256
+    'path_length': 256,
+    'dynamic': True
 }
 
 def train():
@@ -603,50 +605,3 @@ def kinematic_loss(predicted_path, robot_params, dt=0.01):
     total_loss = loss_x + loss_y + loss_theta + loss_v + 0.1 * steering_violation
     
     return total_loss
-def simulate_path(path,robot_params, dt=0.01):
-    #TODO implement , needs te normalization of the parameters 
-    import math 
-    
-    robot_normalization = {
-    "wheelbase": (0.04,1),
-    "max_velocity": (5,20),
-    "max_steering_at_zero_v": (-np.pi/2, np.pi/2),
-    "max_steering_at_max_v": (-np.pi/2, np.pi/2),
-    "acceleration": (2, 10),
-    "mu_static": (0.05, 2.5),
-    "width": (0.1, 1),
-    "length": (0.1, 1)
-    }
-    robot_params = {key: val for key, val in zip(robot_normalization.keys(), robot_params)}
-    _lateral_force_min_v = math.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / math.tan(robot_params["max_steering_at_zero_v"]) ) 
-    result = [path[0]]
-    def propagate(state, control, result):
-     
-        """
-        State: [x, y, theta, v]
-        Control: [acceleration, steering_angle]
-        F_l= mvv/r < mu * g 
-        """
-        angle = math.copysign(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / state[3]**2, control[1])  if state[3] >= _lateral_force_min_v else math.tan(np.clip(control[1], -robot_params["max_steering_at_zero_v"], robot_params["max_steering_at_zero_v"]))
-        # self._debug_counter += 1
-        # if self._debug_counter % 100 == 0:
-        #     print(angle, math.atan(angle) * 180/math.pi)
-            # print(self._debug_counter / 1000000 , 'MIL propagation steps')
-        result[0] =  state[3] * math.cos(state[2])  
-        result[1] = state[3] * math.sin(state[2])  
-        # result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
-        result[2] = (state[3] / robot_params["wheelbase"]) *  angle 
-        result[3] = control[0]
-
-    for i in range(1, len(path)-1):
-        state = result[-1][:4]  # [x, y, theta, v]
-        control = path[i][4:6]  # [acceleration, delta]
-        next_state = [0, 0, 0, 0]
-        propagate(state, control, next_state)
-        new_x = state[0] + next_state[0] * dt
-        new_y = state[1] + next_state[1] * dt
-        new_theta = state[2] + next_state[2] * dt
-        new_v = state[3] + next_state[3] * dt
-        result.append([new_x, new_y, new_theta, new_v] + path[i][4:].tolist())
-
-    return path
