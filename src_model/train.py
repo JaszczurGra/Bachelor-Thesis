@@ -20,6 +20,7 @@ from scipy.interpolate import CubicSpline
 
 #TODO combine with visualizer.py from dataset gen for more accurate reconstruction
 
+#TODO switching between the 3 and 6 values 
 class PathDataset(Dataset):
     def __init__(self, path, n_maps, map_resolution,path_length=256):
         print(f"Loading data from {path}...")
