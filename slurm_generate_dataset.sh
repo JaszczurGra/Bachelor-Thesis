@@ -1,8 +1,8 @@
 #!/bin/bash
 
 N=8
-R=2s
-T=3600
+R=3
+T=7200
 
 
 if [ -z "$1" ]; then
