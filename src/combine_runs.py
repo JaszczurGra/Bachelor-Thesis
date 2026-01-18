@@ -3,6 +3,8 @@ import os
 import datetime 
 import random
 import shutil
+from PIL import Image
+import hashlib
 
 parser = argparse.ArgumentParser(description="Combines parallel runs")
 parser.add_argument('-s','--save', type=str, default='', help='Folder names from parallel_generation to combine, comma separtated')
@@ -13,31 +15,34 @@ parser.add_argument('-cp', '--completly_diffrent',action='store_true', help='If 
 
 args = parser.parse_args()
 
-def same_structure(output_folder,folders):
-    paths = {}
-    maps = {}
 
+def merge_same_photos(output_folder,folders):
+    maps = {}
     for folder in folders:
         for sub in os.listdir(os.path.join('data', folder)):
-            for file in os.listdir(os.path.join('data', folder, sub)):
-                if file.endswith('.json'):
-                    if sub not in paths:
-                        paths[sub] = []
-                    paths[sub].append(os.path.join('data', folder, sub, file))
-                if sub not in maps and file.endswith(('png','jpg')):
-                    maps[sub] = os.path.join('data', folder, sub, file)
-      
-    for sub in maps:
-            output_subfolder = os.path.join(output_folder, sub)
-            os.makedirs(output_subfolder, exist_ok=True)
-
-        
-            shutil.copy2(maps[sub], os.path.join(output_subfolder, os.path.basename(maps[sub])))
+            file = [file for file in os.listdir(os.path.join('data', folder, sub)) if file.endswith(('png','jpg'))]
+            if len(file) > 0:
+                file = file[0]
+                map = Image.open(os.path.join('data', folder, sub, file)).convert('L')
+                map_hash = hashlib.md5(map.tobytes()).hexdigest()
+                if map_hash not in maps:
+                    maps[map_hash] = [os.path.join('data', folder, sub, file)]
+                for file in os.listdir(os.path.join('data', folder, sub)):
+                    if file.endswith(('json')):
+                        maps[map_hash].append(os.path.join('data', folder, sub, file))
 
 
-            if sub in paths:
-                for j, path in enumerate(paths[sub]):
-                    shutil.copy2(path, os.path.join(output_subfolder, f'path_{j}.json'))
+    for i,map_hash in enumerate(maps.keys()):
+        output_subfolder = os.path.join(output_folder, f'map_{i+1}')
+        os.makedirs(output_subfolder, exist_ok=True)
+
+        shutil.copy2(maps[map_hash][0], os.path.join(output_subfolder, 'map.png'))
+
+        for j, path in enumerate(maps[map_hash][1:]):
+            shutil.copy2(path, os.path.join(output_subfolder, f'path_{j}.json'))
+
+
+#Just copies whole folders 
 def completly_diffrent(output_folder,folders):
     i = 0 
     for folder in folders:
@@ -69,11 +74,13 @@ if __name__ == "__main__":
     output_folder = os.path.join('data', f"{args.save.split(',')[0]}_{datetime.datetime.now().strftime('%d-%m-%Y_%H:%M')}")
     os.makedirs(output_folder, exist_ok=True)
 
+    print('Merging folders: ',folders,' into ',output_folder)
+
 
     if args.completly_diffrent:
         completly_diffrent(output_folder, folders)
     else:
-        same_structure(output_folder, folders)
+        merge_same_photos(output_folder, folders)
 
     if args.remove_originals:
         for folder in folders:
