@@ -6,6 +6,8 @@ import shutil
 from PIL import Image
 import hashlib
 
+
+#TODO don't copy empty folders 
 parser = argparse.ArgumentParser(description="Combines parallel runs")
 parser.add_argument('-s','--save', type=str, default='', help='Folder names from parallel_generation to combine, comma separtated')
 parser.add_argument('-rm' ,'--remove_originals', action='store_true', help='Remove original folders after combining')
@@ -31,7 +33,7 @@ def merge_same_photos(output_folder,folders):
                     if file.endswith(('json')):
                         maps[map_hash].append(os.path.join('data', folder, sub, file))
 
-
+    #TODO skip empty maps 
     for i,map_hash in enumerate(maps.keys()):
         output_subfolder = os.path.join(output_folder, f'map_{i+1}')
         os.makedirs(output_subfolder, exist_ok=True)

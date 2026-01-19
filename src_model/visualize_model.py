@@ -195,13 +195,16 @@ if __name__ == "__main__":
     plt.tight_layout()
 
 
+    if args.save_plots:
+        os.makedirs('visualizations', exist_ok=True)
+        os.makedirs(f'visualizations/{run.name}', exist_ok=True)
 
     for i in range(0, len(dataset), n):
         idxs = list(range(i, min(i + n, len(dataset))))
         visualize_results(vis_model, diff, dataset, device, axes, idxs)
         if args.save_plots:
             
-            plt.savefig(f"visualization_{i}.png")
+            plt.savefig(f"visualizations/{run.name}/visualization_{i}.png")
         else:
             plt.show(block=False)
             plt.pause(1)
