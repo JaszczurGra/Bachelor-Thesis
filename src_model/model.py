@@ -18,7 +18,7 @@ class SinusoidalPosEmb(nn.Module):
         return emb
 
 class ResnetBlock1D(nn.Module):
-    def __init__(self, in_channels, out_channels, cond_dim):
+    def __init__(self, in_channels, out_channels, cond_dim, dropout_p=0.0):
         super().__init__()
         
         # 1. Main Convolutional Path
@@ -31,7 +31,6 @@ class ResnetBlock1D(nn.Module):
             nn.SiLU(),
             nn.Linear(cond_dim, out_channels * 2) 
         )
-        
         # 3. Second Convolutional Path
         self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=5, padding=2)
         self.norm2 = nn.GroupNorm(8, out_channels)
@@ -40,6 +39,8 @@ class ResnetBlock1D(nn.Module):
         
         # 4. Residual matching
         self.residual_conv = nn.Conv1d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
+        self.dropout = nn.Dropout1d(dropout_p)
+
 
     def forward(self, x, cond):
         """
@@ -58,6 +59,7 @@ class ResnetBlock1D(nn.Module):
         
         # Second layer
         h = self.act(h)
+        h = self.dropout(h)
         h = self.conv2(h)
         h = self.norm2(h)
         
@@ -68,7 +70,7 @@ class ResnetBlock1D(nn.Module):
 class DiffusionDenoiser(nn.Module):
 
     #TODO proper sizes for robot and state dim either remove unimportant or set the size for all of them  
-    def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128,verbose=True):
+    def __init__(self, state_dim=6, robot_param_dim=8, map_size=500, map_feat_dim=256, robot_feat_dim=128, time_feat_dim=64, num_internal_layers=4, base_layer_dim=128,verbose=True,droupout=0):
         super().__init__()
         if time_feat_dim is None:
             time_feat_dim = base_layer_dim * 4 
@@ -131,18 +133,21 @@ class DiffusionDenoiser(nn.Module):
         for i in range(num_internal_layers):
             in_ch = base_layer_dim * math.pow(2,i-1) if i > 0 else base_layer_dim
             out_ch = base_layer_dim * math.pow(2,i)
-            self.encoders.append(ResnetBlock1D(int(in_ch), int(out_ch), total_cond_dim))
+            p = droupout * i / num_internal_layers 
+            #TODO this is also happening for the vis but is 0 
+            self.encoders.append(ResnetBlock1D(int(in_ch), int(out_ch), total_cond_dim, p))
 
         # --- Create Bottleneck Layer ---
         bottleneck_ch = int(base_layer_dim * math.pow(2,num_internal_layers-1))
-        self.bottleneck = ResnetBlock1D(bottleneck_ch, bottleneck_ch, total_cond_dim)
+        self.bottleneck = ResnetBlock1D(bottleneck_ch, bottleneck_ch, total_cond_dim, droupout)
 
         # --- Create Decoder Layers ---
         # Creates blocks for (512+512)->256, (256+256)->128, (128+128)->128
         for i in range(num_internal_layers - 1, -1, -1):
             in_ch = (base_layer_dim * math.pow(2,i+1)) if i < num_internal_layers -1 else bottleneck_ch * 2
             out_ch = base_layer_dim * math.pow(2,i-1) if i > 0 else base_layer_dim
-            self.decoders.append(ResnetBlock1D(int(in_ch), int(out_ch), total_cond_dim))
+            p = droupout * i / num_internal_layers
+            self.decoders.append(ResnetBlock1D(int(in_ch), int(out_ch), total_cond_dim, p))
             
         self.final_conv = nn.Conv1d(base_layer_dim, state_dim, 1)
 

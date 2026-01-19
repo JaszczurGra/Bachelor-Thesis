@@ -272,7 +272,7 @@ class DiffusionManager:
 local_config = {
     # batch size = 64 - approximately 5GB vram
     "epochs": 2500,
-    "batch_size": 16 ,
+    "batch_size": 64*2 ,
     "lr": 1e-4,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -282,19 +282,21 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 10,
+    'n_maps': 70,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
         'map_feat_dim': 256 ,
         'robot_feat_dim': 128,
         'time_feat_dim': 256, # 4* base layer?
-        'num_internal_layers': 3,
+        'num_internal_layers': 4,
         'base_layer_dim': 128
     },
     'map_resolution': 128,
     'path_length': 256,
-    'dynamic': True
+    'dynamic': True,
+    'weight_decay': 1e-4,
+    'dropout': 0.2
 }
 
 def train():
@@ -334,19 +336,18 @@ def train():
     diff = DiffusionManager(timesteps=config.timesteps,beta_start=config.beta_start,beta_end=config.beta_end, device=device)
 
     #TODO only works for squere maps 
-    model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim']).to(device) 
-    # model = ConditionalUnet1D(input_dim=dataset.path_dim,cond_dim=dataset.robot_dim ).to(device)
-    # if CONFIG['resume_path'] is not None:
-    #     print(f"Loading weights from {CONFIG['resume_path']}...")
-    #     weights = torch.load(CONFIG['resume_path'], map_location=CONFIG['device'])
-    #     model.load_state_dict(weights)
-    #     print("Resuming training from checkpoint!")
+    model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim'], droupout=config.dropout).to(device) 
 
-    optimizer = optim.Adam(model.parameters(), lr=config.lr)
-    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.7, patience=20)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs, eta_min=0)
-    #State of the art up and then down 
-    #   scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.001, total_steps=len(train_loader) * config.epochs)
+    if config.resume_path is not None:
+        print(f"Loading weights from {config.resume_path}...")
+        weights = torch.load(config.resume_path, map_location=device)
+        model.load_state_dict(weights)
+        print("Resuming training from checkpoint!")
+
+    optimizer = optim.Adam(model.parameters(), lr=config.lr,weight_decay=config.weight_decay)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.7, patience=30)
+   #TODO swtich to readuce on platou?????
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs, eta_min=0)
     criterion = torch.nn.MSELoss()
     
     print(f"Starting Training on {device}...")
@@ -399,7 +400,7 @@ def train():
             # },
     
         # scheduler.step(avg_val_loss)
-        scheduler.step()
+        scheduler.step(avg_val_loss)
         print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}", end='\r')
         wandb.log({"train_loss": avg_train_loss,"best_val_loss": best_val_loss, "val_loss": avg_val_loss, "epoch": epoch,"learning_rate": optimizer.param_groups[0]['lr']})
         

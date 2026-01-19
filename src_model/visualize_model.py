@@ -259,7 +259,7 @@ if __name__ == "__main__":
             plt.savefig(f"{save_dir}/visualization_{int(i//n)}.png")
         else:
             plt.show(block=False)
-            plt.pause(1)
+            plt.pause(0.1)
         for ax in axes:
             ax.clear()
 

@@ -8,7 +8,7 @@ parameters:
   # --- Training Parameters to Sweep ---
   lr:
     distribution: log_uniform_values
-    min: 7.0e-4
+    min: 1.0e-3
     max: 1.0e-3
   
   batch_size:
@@ -16,7 +16,7 @@ parameters:
 
   # --- Diffusion Parameters to Sweep ---
   timesteps:
-    values: [500,1000]
+    values: 1000
   
   beta_start:
     distribution: log_uniform_values
@@ -31,7 +31,7 @@ parameters:
   model:
     parameters:
       base_layer_dim:
-        values: [64,128]
+        value: 128
       
       map_feat_dim:
         values: [256,512]
@@ -42,13 +42,13 @@ parameters:
       time_feat_dim:
         value: null # Fixed value
       num_internal_layers: 
-        value: 5
+        values: [3,4,5]
     
   dynamic:
     values: [true, false]
 
   epochs:
-    value: 2000
+    value: 1500
   
   dataset_path:
     value: "slurm_data/slurm_19_01_8k"
@@ -60,11 +60,19 @@ parameters:
     value: 250
   
   visualization_freq:
-    value: 100
+    value: 50
 
-# --- Optional: Early Termination ---
-# This stops unpromising runs early to save compute time.
+  dropout:
+    distribution: uniform
+    min: 0.1
+    max: 0.4
+
+  weight_decay:
+    distribution: log_uniform_values
+    min: 1e-5
+    max: 1e-3
+
 early_terminate:
   type: hyperband
-  min_iter: 1500 
+  min_iter: 300 
   eta: 2
