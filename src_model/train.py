@@ -119,7 +119,8 @@ class PathDataset(Dataset):
         self.robots = torch.tensor(self.robots)
        
         self.dts = torch.tensor([p[-1][-1] for p in self.paths] ) 
-        orubt
+        print(f"Dts min:{min(self.dts)},max:{max(self.dts)}")
+
         self.dts = (self.dts / 0.25 - 0.5) * 2  # Normalize dt to [-1, 1]
         print(f"Dts min:{min(self.dts)},max:{max(self.dts)}")
         
