@@ -25,10 +25,10 @@ class PathDataset(Dataset):
     def __init__(self, path, n_maps, map_resolution,path_length=256, dynamic=False):
         print(f"Loading data from {path}...")
 
-        
+        #TODO path length can't be None for auto as it's used for robot params before assigned
         #should be slightly higher to later allow robots wiht diffrent params such as higher acceleration or max_vel 
-        path_variables = ['x','y','theta','v','accel','delta'] if dynamic else ['x','y','theta']#  
-        path_normalization = {
+        self.path_variables = ['x','y','theta','v','accel','delta'] if dynamic else ['x','y','theta']#  
+        self.path_normalization = {
             'x': (0,15),
             'y': (0,15),
             'theta': (-np.pi, np.pi),
@@ -36,10 +36,12 @@ class PathDataset(Dataset):
             'delta': (-np.pi/2, np.pi/2),
             'accel': (-10, 10)
         }
+
         add_dt = False 
-        robot_variables = [   "wheelbase", "max_velocity","max_steering_at_zero_v","max_steering_at_max_v","acceleration","mu_static","width","length"]
+        self.robot_variables = [   "wheelbase", "max_velocity","max_steering_at_zero_v","max_steering_at_max_v","acceleration","mu_static","width","length"]
         
-        robot_normalization = {
+        #TODO add START and end point here if we wnated to have differnt ones 
+        self.robot_normalization = {
         "wheelbase": (0.04,1),
         "max_velocity": (5,20),
         "max_steering_at_zero_v": (-np.pi/2, np.pi/2),
@@ -76,10 +78,10 @@ class PathDataset(Dataset):
                     data = json.load(f)
                     
                     robot = data['robot']
-                    robot_array = [0] * len(robot_variables)
-                    for j, var in enumerate(robot_variables):
+                    robot_array = [0] * len(self.robot_variables)
+                    for j, var in enumerate(self.robot_variables):
                         if var in robot:
-                            robot_array[j] = 2 * (robot[var] - robot_normalization[var][0]) / (robot_normalization[var][1] - robot_normalization[var][0]) - 1
+                            robot_array[j] = 2 * (robot[var] - self.robot_normalization[var][0]) / (self.robot_normalization[var][1] - self.robot_normalization[var][0]) - 1
     
 
                     planner = data['planner'] 
@@ -103,20 +105,20 @@ class PathDataset(Dataset):
         self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.float32).unsqueeze(1) #(N,H,W)
         #chekc -1 
     
-        path_length = max(len(p) for p in self.paths) if path_length is None else path_length
-        self.paths,dts = self.resample_path(self.paths,path_length ,path_variables, dt=0.01)
+        self.path_length = max(len(p) for p in self.paths) if path_length is None else path_length
+        self.paths,dts = self.resample_path(self.paths,self.path_length ,self.path_variables, dt=0.01)
 
         # Normalize dts to robot_normalization['dt']
-        dt_min, dt_max = robot_normalization['dt']
+        dt_min, dt_max = self.robot_normalization['dt']
         dts = torch.tensor(dts).float()
         dts = 2 * (dts - dt_min) / (dt_max - dt_min) - 1
 
         # self.paths = torch.tensor(self.paths).float().permute(0,2,1)  # [N, 128, 7] -> [N, 7, 128]
         
-        self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:, :len(path_variables),: ] 
+        self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:, :len(self.path_variables),: ] 
         
-        self.paths = 2 * (self.paths - torch.tensor([ [path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1)) / \
-                         torch.tensor([ [path_normalization[var][1] - path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1) - 1
+        self.paths = 2 * (self.paths - torch.tensor([ [self.path_normalization[var][0] for var in self.path_variables] ]).unsqueeze(-1)) / \
+                         torch.tensor([ [self.path_normalization[var][1] - self.path_normalization[var][0] for var in self.path_variables] ]).unsqueeze(-1) - 1
         #TODO do robot normalization here instead of in the loop for faster loading 
         
         self.robots = torch.tensor(self.robots).float()
