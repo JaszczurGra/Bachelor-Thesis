@@ -14,7 +14,7 @@ SWEEP_ID=$(echo "$SWEEP_OUTPUT" | grep -oP 'wandb agent \K.*')
 echo "Sweep ID: $SWEEP_ID"
 
 # Wave 1: Fast exploration (10 agents, 3 hours)
-sbatch --array=0-5 --time=0-15:00:00 <<EOF
+sbatch --array=0-3 --time=0-15:00:00 <<EOF
 #!/bin/bash
 #SBATCH --job-name=diffusion_planning_sweep
 #SBATCH --output=log/diffusion_planning_sweep_%A_%a.out

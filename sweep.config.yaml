@@ -16,7 +16,7 @@ parameters:
 
   # --- Diffusion Parameters to Sweep ---
   timesteps:
-    value: 1000
+    values: [500,1000]
   
   beta_start:
     distribution: log_uniform_values
@@ -31,7 +31,7 @@ parameters:
   model:
     parameters:
       base_layer_dim:
-        values: [64,128]
+        values: [64]
       
       map_feat_dim:
         values: [256,512]
@@ -42,13 +42,16 @@ parameters:
       time_feat_dim:
         value: null # Fixed value
       num_internal_layers: 
-        values: [5,5,7]
+        values: [5]
+    
+    dynamic:
+      values: [True, False]
 
   epochs:
     value: 3500
   
   dataset_path:
-    value: "slurm_data/slurm_10_01_12-01-2026_00:07"
+    value: "slurm_data/slurm_19_01_8k"
   
   n_maps:
     value: 400

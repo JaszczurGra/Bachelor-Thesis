@@ -151,7 +151,7 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     n_maps = config["n_maps"] if args.max_dataset_length is None else min(config["n_maps"], args.max_dataset_length)
-    dataset = PathDataset(config["dataset_path"], n_maps, config["map_resolution"], config["path_length"])
+    dataset = PathDataset(config["dataset_path"], n_maps, config["map_resolution"], config["path_length"],True)
     diff = DiffusionManager(
         timesteps=config["timesteps"],
         beta_start=config["beta_start"],

@@ -48,7 +48,7 @@ class PathDataset(Dataset):
         "mu_static": (0.05, 2.5),
         "width": (0.1, 1),
         "length": (0.1, 1),
-        # "dt": (0, 60)
+        "dt": (0.01, (0.1 *   256 ) / float(path_length))  # dt adjusted based on path length, the shortest path can be 10 times shorter than the longest
         }
 
         self.maps = []
@@ -104,28 +104,26 @@ class PathDataset(Dataset):
         #chekc -1 
     
         path_length = max(len(p) for p in self.paths) if path_length is None else path_length
-        self.paths = self.resample_path(self.paths,path_length ,path_variables, dt=0.01)
-        
+        self.paths,dts = self.resample_path(self.paths,path_length ,path_variables, dt=0.01)
 
+        # Normalize dts to robot_normalization['dt']
+        dt_min, dt_max = robot_normalization['dt']
+        dts = torch.tensor(dts).float()
+        dts = 2 * (dts - dt_min) / (dt_max - dt_min) - 1
 
         # self.paths = torch.tensor(self.paths).float().permute(0,2,1)  # [N, 128, 7] -> [N, 7, 128]
         
-        self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:, :len(path_variables) + (1 if add_dt else 0),: ] 
+        self.paths = torch.tensor(self.paths).float().permute(0,2,1)[:, :len(path_variables),: ] 
         
         self.paths = 2 * (self.paths - torch.tensor([ [path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1)) / \
                          torch.tensor([ [path_normalization[var][1] - path_normalization[var][0] for var in path_variables] ]).unsqueeze(-1) - 1
         #TODO do robot normalization here instead of in the loop for faster loading 
         
-        self.robots = torch.tensor(self.robots)
-       
-        self.dts = torch.tensor([p[-1][-1] for p in self.paths] ) 
-        print(f"Dts min:{min(self.dts)},max:{max(self.dts)}")
+        self.robots = torch.tensor(self.robots).float()
+        if dynamic:
+            self.robots = torch.cat([self.robots, dts.unsqueeze(1)], dim=1).float()  # Append dt to robot parameters
 
-        self.dts = (self.dts / 0.25 - 0.5) * 2  # Normalize dt to [-1, 1]
-        print(f"Dts min:{min(self.dts)},max:{max(self.dts)}")
-        
-        
-        self.robots = torch.cat([self.robots, self.dts.unsqueeze(1)], dim=1)  # Append dt to robot parameters
+
         self.robot_dim = self.robots.shape[1]
         self.path_dim = self.paths.shape[1]
         #TODO do wee need that?  f.e only flip verticaly ?  
@@ -157,6 +155,8 @@ class PathDataset(Dataset):
         #     # self.paths.append(p_v.transpose(0, 1))
             
         print(f"Training on {len(self.maps)} maps with {len(self.paths)} paths.", end='\n\n')
+        print('Min dt', min(dts), 'max dt', max(dts))
+
         
     def __len__(self):
         return len(self.paths)
@@ -176,7 +176,7 @@ class PathDataset(Dataset):
         #         self.paths[i] = path + padding
         
 
-        
+        dts = []
         resampled_paths = []
         for path in self.paths:
             path_np = np.array(path)
@@ -209,12 +209,11 @@ class PathDataset(Dataset):
                     spline = CubicSpline(original_time_points, path_np[:, i])
                     resampled_path_full[:, i] = spline(new_time_points)
             
-            if len(path_np[0]) > len(path_variables):
-                resampled_path_full[:, -1] = new_dt
+            dts.append(new_dt)
             
             resampled_paths.append(resampled_path_full.tolist())
         
-        return resampled_paths
+        return resampled_paths,dts
 
     # def vis(self,idx):
     #     return self.maps[idx], self.paths[self.map_indexes[idx]], self.planner[idx], self.robot[idx]
