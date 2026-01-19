@@ -133,12 +133,12 @@ def simulate_path_cuda(path,robot_params, dataset):
         # All math below should use torch functions!
         # Example:
         angle = torch.where(
-            prev_state[3, :] >= _lateral_force_min_v,
-            robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / prev_state[3, :]**2 * torch.sign(control[:,1]),
+            prev_state[:, 3] >= _lateral_force_min_v,
+            robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / prev_state[:, 3]**2 * torch.sign(control[:,1]),
             torch.tan(torch.clamp(control[:, 1], -robot_params["max_steering_at_zero_v"], robot_params["max_steering_at_zero_v"]))
         )
-        dx = prev_state[3, :] * torch.cos(prev_state[2, :])
-        dy = prev_state[3, :] * torch.sin(prev_state[2, :])
+        dx = prev_state[:, 3] * torch.cos(prev_state[:, 2])
+        dy = prev_state[:, 3] * torch.sin(prev_state[:, 2])
         dtheta = (prev_state[:, 3] / robot_params["wheelbase"]) * angle
         dv = control[:, 0]
         # Update state

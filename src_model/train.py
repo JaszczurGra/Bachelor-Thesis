@@ -12,7 +12,6 @@ from test_model import ConditionalUnet1D
 import os 
 from PIL import Image
 from scipy.interpolate import CubicSpline
-
  
  #TODO visualize on high quality map 
 
@@ -278,11 +277,11 @@ local_config = {
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     # "dataset_path": "slurm_data/singular_path",
     # "dataset_path": "data/dubins_singular",
-    "dataset_path": "slurm_data/slurm_10_01_12-01-2026_00:07",
+    "dataset_path": "slurm_data/slurm_19_01_8k",
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 70,
+    'n_maps': 5,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
@@ -419,15 +418,68 @@ def train():
             else: # Fallback for the first visualization before any model is saved
                 vis_model.load_state_dict(model.state_dict())
             
-            visualize_results(vis_model, diff, val_dataset, epoch, device)
+            visualize_results(vis_model, diff, val_dataset, epoch, device,config,full_dataset=dataset)
             
 import math
 
 
+def simulate_path_cuda(path,robot_params, dataset):
+    # states = torch.zeros((N, T, 4), device=device)      # [x, y, theta, v]
+    # controls = torch.zeros((N, T, 2), device=device)    # [acceleration, steering_angle]
+    device = path.device  # Ensure all tensors are on the same device
+    # Make sure these tensors are on the same device as path
+    norm_ranges = torch.tensor(
+        [[dataset.path_normalization[var][1] - dataset.path_normalization[var][0] for var in dataset.path_variables]],
+        device=device
+    ).unsqueeze(-1)
+    norm_mins = torch.tensor(
+        [[dataset.path_normalization[var][0] for var in dataset.path_variables]],
+        device=device
+    ).unsqueeze(-1)
+
+    path = path.clone()
+    path = 0.5 * (path + 1) * norm_ranges + norm_mins
+# Your robot_params should be tensors or broadcastable arrays on the same device
+    states = path[:, :4, :]      # [N, T, 4]  [x, y, theta, v]
+    controls = path[:, 4:6, :]    # [N, T, 2]  [acceleration, steering_angle]
+    robot_param_dict = {}
+    for i, key in enumerate(dataset.robot_variables + ['dt']):
+        robot_param_dict[key] = robot_params[:, i]
+    robot_params = robot_param_dict
+    
+    robot_params = { k: (v + 1) *  (dataset.robot_normalization[k][1] - dataset.robot_normalization[k][0]) / 2 + dataset.robot_normalization[k][0] for k, v in robot_params.items()}
+
+    _lateral_force_min_v = torch.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / torch.tan(robot_params["max_steering_at_zero_v"]) ) 
+   
+    dt = robot_params["dt"]  # (N, 1)
+
+    for t in range(1, dataset.path_length):
+        prev_state = states[:, :, t-1]  # (N, 4)
+        control = controls[:, :, t]     # (N, 2)
+        # All math below should use torch functions!
+        # Example:
+        angle = torch.where(
+            prev_state[:, 3] >= _lateral_force_min_v,
+            robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / prev_state[:, 3]**2 * torch.sign(control[:,1]),
+            torch.tan(torch.clamp(control[:, 1], -robot_params["max_steering_at_zero_v"], robot_params["max_steering_at_zero_v"]))
+        )
+        dx = prev_state[:, 3] * torch.cos(prev_state[:, 2])
+        dy = prev_state[:, 3] * torch.sin(prev_state[:, 2])
+        dtheta = (prev_state[:, 3] / robot_params["wheelbase"]) * angle
+        dv = control[:, 0]
+        # Update state
+        states[:, 0, t] = prev_state[:, 0] + dx * dt
+        states[:, 1, t] = prev_state[:, 1] + dy * dt
+        states[:, 2, t] = prev_state[:, 2] + dtheta * dt
+        states[:, 3, t] = prev_state[:, 3] + dv * dt
+
+    path = (torch.cat([states, controls], dim=1) - norm_mins) / norm_ranges * 2 - 1
+
+    return path.cpu().numpy()
 
 
 
-def visualize_results(model, diff, dataset, epoch,device):
+def visualize_results(model, diff, dataset, epoch,device,config,full_dataset=None):
     max_n = 16
     idxs = np.random.choice(len(dataset), size=min(max_n, len(dataset)), replace=False).astype(int)
     n = len(idxs)
@@ -443,6 +495,9 @@ def visualize_results(model, diff, dataset, epoch,device):
     generated_path = diff.sample(model, map_tensor,robot, real_path).squeeze(0) 
     generated_path = generated_path if n > 1 else generated_path.unsqueeze(0)
     gen_path = generated_path.cpu().numpy() 
+
+    if config.dynamic and full_dataset is not None:
+        simulated_path = simulate_path_cuda(generated_path, robot, full_dataset)
 
     real_path = real_path.cpu().numpy()
     map_img = map_tensor.cpu().numpy()
@@ -481,17 +536,16 @@ def visualize_results(model, diff, dataset, epoch,device):
         ax.plot(rotated_corners[:, 0], rotated_corners[:, 1], 'b-', linewidth=2, label='Robot')
         ax.plot(gen_path[i,0,:], gen_path[i,1,:], 'r-', linewidth=2, label='Diffusion')
 
-        # simulated_path = simulate_path(generated_path[i], robot[i].cpu().numpy(), dt=0.01)
-        # # ax.plot(simulated_path[0,:], simulated_path[1,:], 'b-', linewidth=2, label='Simulated from gt')
-        
+
+        if config.dynamic and full_dataset is not None:
+            ax.plot(simulated_path[i,0,:], simulated_path[i,1,:], 'm-', linewidth=2, label='Simulated from Diffusion')
+      
         ax.legend()
         ax.set_title(f"Epoch {epoch}")
     
     plt.tight_layout()
     #This should return fig so we can log it thogherter with epoch etc so ther nr of logs is equal to the nr of epochs
     wandb.log({"generated_path": wandb.Image(fig)})
-    # plt.show(block=False)
-    # plt.pause(5)
     plt.close(fig)
 
 if __name__ == "__main__":
@@ -609,3 +663,6 @@ def kinematic_loss(predicted_path, robot_params, dt=0.01):
     total_loss = loss_x + loss_y + loss_theta + loss_v + 0.1 * steering_violation
     
     return total_loss
+
+
+

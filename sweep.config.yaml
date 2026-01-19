@@ -7,9 +7,10 @@ metric:
 parameters:
   # --- Training Parameters to Sweep ---
   lr:
-    distribution: log_uniform_values
-    min: 1.0e-3
-    max: 1.0e-3
+    value: 1.0e-3
+    # distribution: log_uniform_values
+    # min: 1.0e-3
+    # max: 1.0e-3
   
   batch_size:
     values: [1024, 512, 256, 128]
