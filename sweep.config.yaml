@@ -42,10 +42,10 @@ parameters:
       time_feat_dim:
         value: null # Fixed value
       num_internal_layers: 
-        values: [5]
+        value: 5
     
-    dynamic:
-      values: [True, False]
+  dynamic:
+    values: [true, false]
 
   epochs:
     value: 2000
