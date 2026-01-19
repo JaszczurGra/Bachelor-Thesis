@@ -22,12 +22,12 @@ from scipy.interpolate import CubicSpline
 
 #TODO switching between the 3 and 6 values 
 class PathDataset(Dataset):
-    def __init__(self, path, n_maps, map_resolution,path_length=256):
+    def __init__(self, path, n_maps, map_resolution,path_length=256, dynamic=False):
         print(f"Loading data from {path}...")
 
         
         #should be slightly higher to later allow robots wiht diffrent params such as higher acceleration or max_vel 
-        path_variables = ['x','y','theta']#,'v','accel','delta']
+        path_variables = ['x','y','theta','v','accel','delta'] if dynamic else ['x','y','theta']#  
         path_normalization = {
             'x': (0,15),
             'y': (0,15),
@@ -119,6 +119,7 @@ class PathDataset(Dataset):
         self.robots = torch.tensor(self.robots)
        
         self.dts = torch.tensor([p[-1][-1] for p in self.paths] ) 
+        orubt
         self.dts = (self.dts / 0.25 - 0.5) * 2  # Normalize dt to [-1, 1]
         print(f"Dts min:{min(self.dts)},max:{max(self.dts)}")
         
@@ -302,7 +303,7 @@ def train():
     device = config.device
 
 
-    dataset = PathDataset(config.dataset_path,config.n_maps, config.map_resolution,config.path_length)
+    dataset = PathDataset(config.dataset_path,config.n_maps, config.map_resolution,config.path_length,config.dynamic)
 
 
     train_size = int(0.8 * len(dataset))

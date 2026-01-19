@@ -194,17 +194,16 @@ if __name__ == "__main__":
     axes = axes.flatten() if n > 1 else [axes]
     plt.tight_layout()
 
-
+    save_dir = f"visualizations/{run.name}"
     if args.save_plots:
-        os.makedirs('visualizations', exist_ok=True)
-        os.makedirs(f'visualizations/{run.name}', exist_ok=True)
+        os.makedirs(save_dir, exist_ok=True)
+
 
     for i in range(0, len(dataset), n):
         idxs = list(range(i, min(i + n, len(dataset))))
         visualize_results(vis_model, diff, dataset, device, axes, idxs)
         if args.save_plots:
-            
-            plt.savefig(f"visualizations/{run.name}/visualization_{i}.png")
+            plt.savefig(f"{save_dir}/visualization_{int(i//n)}.png")
         else:
             plt.show(block=False)
             plt.pause(1)
