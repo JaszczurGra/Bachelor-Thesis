@@ -31,7 +31,7 @@ parameters:
   model:
     parameters:
       base_layer_dim:
-        values: [64]
+        values: [64,128]
       
       map_feat_dim:
         values: [256,512]
@@ -48,7 +48,7 @@ parameters:
       values: [True, False]
 
   epochs:
-    value: 3500
+    value: 2000
   
   dataset_path:
     value: "slurm_data/slurm_19_01_8k"
@@ -64,7 +64,7 @@ parameters:
 
 # --- Optional: Early Termination ---
 # This stops unpromising runs early to save compute time.
-# early_terminate:
-#   type: hyperband
-#   min_iter: 300 
-#   eta: 2
+early_terminate:
+  type: hyperband
+  min_iter: 1500 
+  eta: 2
