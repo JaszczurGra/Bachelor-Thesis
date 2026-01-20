@@ -29,7 +29,8 @@ class Visualizer:
         n_rows = math.ceil(self.n_plots / n_cols)
         
         self.fig, axs = plt.subplots(n_rows, n_cols)#, figsize=(5 * n_cols, 5 * n_rows))
-        self.fig.suptitle(f'OMPL Car Planning - Continuous', fontsize=16)
+        #TODO ADD the thtile back
+        # self.fig.suptitle(f'OMPL Car Planning - Continuous', fontsize=16)
         # fig.set_facecolor('#2e2e2e')
         # Flatten axes
         if self.n_plots == 1:
@@ -57,8 +58,10 @@ class Visualizer:
 
         self.set_labels = False
 
-    def update(self, result_list,show_params=True):
+    def update(self, result_list,show_params=True,custom_tile=None):
+        #custom title : list of strings with length n_plots
         draw = False
+        
         for i in range(self.n_plots):
                 result = result_list[i]
                 ax = self.axs_flat[i]
@@ -68,7 +71,8 @@ class Visualizer:
                 if result['timestamp'] > self.last_timestamps[i]:
                     self.last_timestamps[i] = result['timestamp']
                     ax.set_visible(True)
- 
+
+                    print('drawing')
 
                     ax.cla()
                     ax.set_xlim(0, 10)
@@ -78,12 +82,12 @@ class Visualizer:
                     max_vel = result['planner'].visualize(ax,point_iteration = 50)
                     # ax.set_title(f'Planner {i} - Run {result["run"]} - Solved:  {"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
                     # ax.set_title(f'P:{i}R:{result["run"]}-{"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"} V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f}')
-                    ax.set_title(f'V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f} ' + (f'T:{result["planner"].solved_time:.2f}s' if result['planner'].solved_time is not None else ''))
-                    if not self.set_labels:
-                        handles, labels = ax.get_legend_handles_labels()
-                        unique_labels = dict(zip(labels, handles))
-                        self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
-                        self.set_labels = True
+                    ax.set_title((f'V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f} ' + (f'T:{result["planner"].solved_time:.2f}s' if result['planner'].solved_time is not None else '')) if custom_tile is None else custom_tile[i])
+                    # if not self.set_labels:
+                    #     handles, labels = ax.get_legend_handles_labels()
+                    #     unique_labels = dict(zip(labels, handles))
+                    #     self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
+                    #     self.set_labels = True
 
 
                     if show_params:
@@ -91,51 +95,24 @@ class Visualizer:
                         ax.text(1,0, legend_text, transform=ax.transAxes, 
                             verticalalignment='bottom',fontsize = self.font_size , horizontalalignment='right',
                             bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
-                    draw = True
+                    # draw = True
 
         if draw:
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
 
+    # def self.draw_all(self):
 
 
     def close(self):
-        pass
- 
-
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description="Visualization of OMPL Car Planning Results")
-    parser.add_argument('-n', '--num_plots', type=int, default=16, help='Number of plots')
-    parser.add_argument('-d', '--data', type=str, default=None, help='Path to load data from file')
-    parser.add_argument('--params', action='store_true', help='Do not show robot parameters on plots')
-    args = parser.parse_args()
-
-    if args.data is None:
-        print("Please provide a data file path using the -d or --data argument.")
-        exit(1)
-    if not os.path.isdir(args.data):
-        print(f"The provided data path '{args.data}' is not a valid directory.")
-        exit(1)
+        return
 
 
-    map_folders = [d for d in os.listdir(args.data) if d.startswith('map_')]
-
-    all_results = []
-    for map_folder in map_folders:
-        map_path = os.path.join(args.data, map_folder)
-        
-        # Load map image
-        map_files = [f for f in os.listdir(map_path) if f == 'map.png']
-
-        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])).convert('1'))[::-1] if map_files else np.zeros((50,50)) 
 
 
-        
-        # Load all path JSON files
-        path_files = [f for f in os.listdir(map_path) if f.startswith('path_') and f.endswith('.json')]
-        
-        for i, path_file in enumerate(path_files):
+def parse_path(map_path, path_files,map_array):
+    all_paths = []
+    for i, path_file in enumerate(path_files):
             with open(os.path.join(map_path, path_file), 'r') as f:
                 data = json.load(f)
             
@@ -157,14 +134,91 @@ if __name__ == "__main__":
             if robot and hasattr(robot, 'collision_check_angle_res'):
                 #Disabling the multiple dilated map generation
                 robot.collision_check_angle_res = collision_check
-
-            all_results.append({
+            print(f"Loaded path {i + 1}/{len(path_files)} from {map_folder}")
+            all_paths.append({   
                 'planner': planner,
                 'solved': True,
                 'timestamp': 0.0,
                 'run': path_file,
             })
-            print(f"Loaded path {i + 1}/{len(path_files)} from {map_folder}")
+    return all_paths
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="Visualization of OMPL Car Planning Results")
+    parser.add_argument('-n', '--num_plots', type=int, default=16, help='Number of plots')
+    parser.add_argument('-d', '--data', type=str, default=None, help='Path to load data from file')
+    parser.add_argument('--params', action='store_true', help='Do not show robot parameters on plots')
+    parser.add_argument('--save', type=str, default=None, help='Path to save the visualization as an image')
+    args = parser.parse_args()
+
+    if args.data is None:
+        print("Please provide a data file path using the -d or --data argument.")
+        exit(1)
+    if not os.path.isdir(args.data):
+        print(f"The provided data path '{args.data}' is not a valid directory.")
+        exit(1)
+
+
+    map_folders = [d for d in os.listdir(args.data) if d.startswith('map_')]
+
+
+    if args.save is not None:
+        os.makedirs(os.path.join('path_visualizations', args.save), exist_ok=True)
+        all_results = []
+        map_idx = []
+        for map_folder in map_folders:
+            map_path = os.path.join(args.data, map_folder)
+            map_files = [f for f in os.listdir(map_path) if f == 'map.png']
+            map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])).convert('1'))[::-1] if map_files else np.zeros((50,50)) 
+            path_files = [f for f in os.listdir(map_path) if f.startswith('path_') and f.endswith('.json')]
+
+            all_results += parse_path(map_path, path_files,map_array)
+            map_idx += [map_folder] * len(path_files)
+
+        visualizer = Visualizer(n_plots=1)
+        total_pages = len(all_results)
+        visualizer.fig.tight_layout()
+        for i in range(total_pages):
+
+            start_idx = i * 1
+            end_idx = min(start_idx + 1, len(all_results))
+            
+            result_list = [None] * 1
+            
+            for plot_idx in range(1):
+                result_idx = start_idx + plot_idx
+                if result_idx < end_idx:
+                    all_results[result_idx]['timestamp'] = i
+                    all_results[result_idx]['run'] = result_idx + 1
+                    result_list[plot_idx] = all_results[result_idx]
+
+            visualizer.update(result_list, args.params, custom_tile=['']*1)
+            visualizer.fig.savefig(os.path.join('path_visualizations', args.save, f'visualization_{map_idx[i*1]}.pdf'))
+        exit(0)
+        
+            
+    print('normalallal')
+    
+
+        
+
+    all_results = []
+    for map_folder in map_folders:
+        map_path = os.path.join(args.data, map_folder)
+        
+        # Load map image
+        map_files = [f for f in os.listdir(map_path) if f == 'map.png']
+
+        map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])).convert('1'))[::-1] if map_files else np.zeros((50,50)) 
+
+
+        
+        # Load all path JSON files
+        path_files = [f for f in os.listdir(map_path) if f.startswith('path_') and f.endswith('.json')]
+        
+
+        all_results += parse_path(map_path, path_files,map_array)
     
     print(f"Loaded {len(all_results)} paths from {len(map_folders)} maps")
     
