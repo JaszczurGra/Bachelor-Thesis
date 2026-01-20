@@ -19,9 +19,9 @@ import matplotlib
 #TODO check if tkinter exists if not run with base backend and warn user and chane draw idle etc 
 #  LineCollection for drawingpaths 
 class Visualizer:
-    def __init__(self, n_plots):
-
-        plt.ion()
+    def __init__(self, n_plots,show=True):
+        
+        if show: plt.ion()
         self.n_plots = n_plots
         n_cols = math.ceil(math.sqrt(self.n_plots))
 
@@ -52,16 +52,14 @@ class Visualizer:
             ax.set_autoscale_on(False)
 
         # plt.tight_layout()
-        plt.pause(0.5)
+        # plt.pause(0.5)
 
         self.last_timestamps = [0.0] * self.n_plots
 
         self.set_labels = False
 
-    def update(self, result_list,show_params=True,custom_tile=None):
+    def update(self, result_list,show_params=True,show_labels=True,custom_title=None):
         #custom title : list of strings with length n_plots
-        draw = False
-        
         for i in range(self.n_plots):
                 result = result_list[i]
                 ax = self.axs_flat[i]
@@ -71,37 +69,33 @@ class Visualizer:
                 if result['timestamp'] > self.last_timestamps[i]:
                     self.last_timestamps[i] = result['timestamp']
                     ax.set_visible(True)
+                    self.draw_one(result, ax, show_params, show_labels, custom_tile=custom_title[i] if custom_title is not None else None)
 
-                    print('drawing')
+        self.fig.canvas.draw_idle()
+        self.fig.canvas.flush_events()
 
-                    ax.cla()
-                    ax.set_xlim(0, 10)
-                    ax.set_ylim(0, 10)
-                    ax.grid(True, alpha=0.3)
-                    
-                    max_vel = result['planner'].visualize(ax,point_iteration = 50)
-                    # ax.set_title(f'Planner {i} - Run {result["run"]} - Solved:  {"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"}')
-                    # ax.set_title(f'P:{i}R:{result["run"]}-{"Exact" if result["solved"] else "Approximate" if result["solved"] is not None else "No solution"} V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f}')
-                    ax.set_title((f'V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f} ' + (f'T:{result["planner"].solved_time:.2f}s' if result['planner'].solved_time is not None else '')) if custom_tile is None else custom_tile[i])
-                    # if not self.set_labels:
-                    #     handles, labels = ax.get_legend_handles_labels()
-                    #     unique_labels = dict(zip(labels, handles))
-                    #     self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
-                    #     self.set_labels = True
+    def draw_one(self, result, ax, show_params=True, show_labels=False, custom_tile=None):
+            ax.cla()
+            ax.grid(True, alpha=0.3)
+            
+            max_vel = result['planner'].visualize(ax,point_iteration = 50)
+            ax.set_title((f'V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f} ' + (f'T:{result["planner"].solved_time:.2f}s' if result['planner'].solved_time is not None else '')) if custom_tile is None else custom_tile)
+            
+            #Show legend only once
+            if not self.set_labels and show_labels:
+                handles, labels = ax.get_legend_handles_labels()
+                unique_labels = dict(zip(labels, handles))
+                self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
+                self.set_labels = True
 
 
-                    if show_params:
-                        legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['planner'].robot.print_info().items() if isinstance(value, (int, float))) 
-                        ax.text(1,0, legend_text, transform=ax.transAxes, 
-                            verticalalignment='bottom',fontsize = self.font_size , horizontalalignment='right',
-                            bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
-                    # draw = True
+            if show_params:
+                legend_text = "\n".join(f"{key}: {value:.2f}" for key, value in result['planner'].robot.print_info().items() if isinstance(value, (int, float))) 
+                ax.text(1,0, legend_text, transform=ax.transAxes, 
+                    verticalalignment='bottom',fontsize = self.font_size , horizontalalignment='right',
+                    bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
+            print('drawn')
 
-        if draw:
-            self.fig.canvas.draw_idle()
-            self.fig.canvas.flush_events()
-
-    # def self.draw_all(self):
 
 
     def close(self):
@@ -162,7 +156,7 @@ if __name__ == "__main__":
 
     map_folders = [d for d in os.listdir(args.data) if d.startswith('map_')]
 
-
+    #TODO why does the multiple not show in saving 
     if args.save is not None:
         os.makedirs(os.path.join('path_visualizations', args.save), exist_ok=True)
         all_results = []
@@ -172,36 +166,30 @@ if __name__ == "__main__":
             map_files = [f for f in os.listdir(map_path) if f == 'map.png']
             map_array =  np.array(Image.open(os.path.join(map_path, map_files[0])).convert('1'))[::-1] if map_files else np.zeros((50,50)) 
             path_files = [f for f in os.listdir(map_path) if f.startswith('path_') and f.endswith('.json')]
-
             all_results += parse_path(map_path, path_files,map_array)
-            map_idx += [map_folder] * len(path_files)
+            map_idx += [f"{map_folder}_path_{i}" for i in range(len(path_files))]
 
-        visualizer = Visualizer(n_plots=1)
-        total_pages = len(all_results)
+        visualizer = Visualizer(n_plots=1,show=False)
+        total_pages = math.ceil(math.sqrt(len(all_results) / args.num_plots))
         visualizer.fig.tight_layout()
         for i in range(total_pages):
 
-            start_idx = i * 1
-            end_idx = min(start_idx + 1, len(all_results))
+            start_idx = i * args.num_plots
+            end_idx = min(start_idx + args.num_plots, len(all_results))
             
-            result_list = [None] * 1
+            result_list = [None] * args.num_plots
             
-            for plot_idx in range(1):
+            for plot_idx in range(args.num_plots):
                 result_idx = start_idx + plot_idx
                 if result_idx < end_idx:
-                    all_results[result_idx]['timestamp'] = i
-                    all_results[result_idx]['run'] = result_idx + 1
+                    all_results[result_idx]['timestamp'] = i + 1 
                     result_list[plot_idx] = all_results[result_idx]
+            print(result_list)
+            visualizer.update(result_list, args.params,show_labels=False, custom_title=['']*args.num_plots)
+            print('saved')
+            visualizer.fig.savefig(os.path.join('path_visualizations', args.save, f'visualization_{"-".join([map_idx[start_idx]] + ( [map_idx[end_idx-1]] if end_idx - 1 != start_idx else []) )}.pdf'))
 
-            visualizer.update(result_list, args.params, custom_tile=['']*1)
-            visualizer.fig.savefig(os.path.join('path_visualizations', args.save, f'visualization_{map_idx[i*1]}.pdf'))
-        exit(0)
-        
-            
-    print('normalallal')
-    
-
-        
+        exit(0)    
 
     all_results = []
     for map_folder in map_folders:
