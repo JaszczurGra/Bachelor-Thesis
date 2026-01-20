@@ -81,11 +81,13 @@ class DiffusionDenoiser(nn.Module):
             print('Network depth:', num_internal_layers, 'base layer dim:', base_layer_dim)
     # 1. Map Encoder (CNN)
         self.map_cnn = nn.Sequential(
-            nn.Conv2d(1, 16, 3, stride=2, padding=1), # Output: 32x32
+            nn.Conv2d(1, 16, 3, stride=2, padding=1),   # Output: map_size/2 x map_size/2
             nn.ReLU(),
-            nn.Conv2d(16, 32, 3, stride=2, padding=1), # Output: 16x16
+            nn.Conv2d(16, 32, 3, stride=2, padding=1),  # Output: map_size/4 x map_size/4
+            nn.ReLU(),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),  # Output: map_size/8 x map_size/8
             nn.Flatten(),
-            nn.Linear(32 * (map_size//4) * (map_size//4), map_feat_dim)
+            nn.Linear(64 * (map_size//8) * (map_size//8), map_feat_dim)
         )
         
         # 2. Robot Param Encoder

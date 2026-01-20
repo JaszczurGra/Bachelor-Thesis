@@ -5,6 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 import wandb
 import numpy as np
 import matplotlib
+
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from model import DiffusionDenoiser
@@ -17,16 +19,102 @@ from scipy.interpolate import CubicSpline
 
  #TODO robot always starts in the same positions we should train it on multiple start,goal positions, shouldnt it be included somewhere in params nontheles???
 
-#TODO combine with visualizer.py from dataset gen for more accurate reconstruction
+class BSpline:
+    def __init__(self, n, d=7, num_T_pts=1024, name=""):
+        self.num_T_pts = num_T_pts
+        self.d = d
+        self.n_pts = n
+        self.m = self.d + self.n_pts
+        self.u = np.pad(np.linspace(0., 1., self.m + 1 - 2 * self.d), self.d, 'edge')
+        folder = 'bsplines'
+        fname = f"{folder}/bspline_{name}_{self.n_pts}_{self.d}_{self.num_T_pts}.npy"
+        if os.path.exists(fname):
+            d = np.load(fname, allow_pickle=True).item()
+            self.N = d["N"]
+            self.dN = d["dN"]
+            self.ddN = d["ddN"]
+            self.dddN = d["dddN"]
+        else:
+            self.N, self.dN, self.ddN, self.dddN = self.calculate_N()
+            os.makedirs(folder, exist_ok=True)
+            np.save(fname, {"N": self.N, "dN": self.dN, "ddN": self.ddN, "dddN": self.dddN}, allow_pickle=True)
+        self.N = self.N.astype(np.float32)
+        self.dN = self.dN.astype(np.float32)
+        self.ddN = self.ddN.astype(np.float32)
+        self.dddN = self.dddN.astype(np.float32)
 
-#TODO switching between the 3 and 6 values 
+    def calculate_N(self):
+        def N(n, t, i):
+            if n == 0:
+                if self.u[i] <= t < self.u[i + 1]:
+                    return 1
+                else:
+                    return 0
+            s = 0.
+            if self.u[i + n] - self.u[i] != 0:
+                s += (t - self.u[i]) / (self.u[i + n] - self.u[i]) * N(n - 1, t, i)
+            if self.u[i + n + 1] - self.u[i + 1] != 0:
+                s += (self.u[i + n + 1] - t) / (self.u[i + n + 1] - self.u[i + 1]) * N(n - 1, t, i + 1)
+            return s
+
+        def dN(n, t, i):
+            m1 = self.u[i + n] - self.u[i]
+            m2 = self.u[i + n + 1] - self.u[i + 1]
+            s = 0.
+            if m1 != 0:
+                s += N(n - 1, t, i) / m1
+            if m2 != 0:
+                s -= N(n - 1, t, i + 1) / m2
+            return n * s
+
+        def ddN(n, t, i):
+            m1 = self.u[i + n] - self.u[i]
+            m2 = self.u[i + n + 1] - self.u[i + 1]
+            s = 0.
+            if m1 != 0:
+                s += dN(n - 1, t, i) / m1
+            if m2 != 0:
+                s -= dN(n - 1, t, i + 1) / m2
+            return n * s
+
+        def dddN(n, t, i):
+            m1 = self.u[i + n] - self.u[i]
+            m2 = self.u[i + n + 1] - self.u[i + 1]
+            s = 0.
+            if m1 != 0:
+                s += ddN(n - 1, t, i) / m1
+            if m2 != 0:
+                s -= ddN(n - 1, t, i + 1) / m2
+            return n * s
+
+        T = np.linspace(0., 1., self.num_T_pts)
+        Ns = [np.stack([N(self.d, t, i) for i in range(self.m - self.d)]) for t in T]
+        Ns = np.stack(Ns, axis=0)
+        Ns[-1, -1] = 1.
+        dNs = [np.stack([dN(self.d, t, i) for i in range(self.m - self.d)]) for t in T]
+        dNs = np.stack(dNs, axis=0)
+        dNs[-1, -1] = (self.m - 2 * self.d) * self.d
+        dNs[-1, -2] = -(self.m - 2 * self.d) * self.d
+        ddNs = [np.stack([ddN(self.d, t, i) for i in range(self.m - self.d)]) for t in T]
+        ddNs = np.stack(ddNs, axis=0)
+        ddNs[-1, -1] = 2 * self.d * (self.m - 2 * self.d) ** 2 * (self.d - 1) / 2
+        ddNs[-1, -2] = -3 * self.d * (self.m - 2 * self.d) ** 2 * (self.d - 1) / 2
+        ddNs[-1, -3] = self.d * (self.m - 2 * self.d) ** 2 * (self.d - 1) / 2
+        dddNs = [np.stack([dddN(self.d, t, i) for i in range(self.m - self.d)]) for t in T]
+        dddNs = np.stack(dddNs, axis=0)
+        dddNs[-1, -1] = 6 * self.d * (self.m - 2 * self.d) ** 3 * (self.d - 2)
+        dddNs[-1, -2] = -10.5 * self.d * (self.m - 2 * self.d) ** 3 * (self.d - 2)
+        dddNs[-1, -3] = 5.5 * self.d * (self.m - 2 * self.d) ** 3 * (self.d - 2)
+        dddNs[-1, -4] = -self.d * (self.m - 2 * self.d) ** 3 * (self.d - 2)
+        return Ns[np.newaxis], dNs[np.newaxis], ddNs[np.newaxis], dddNs[np.newaxis]
+
 class PathDataset(Dataset):
-    def __init__(self, path, n_maps, map_resolution,path_length=256, dynamic=False):
+    def __init__(self, path, n_maps, map_resolution,path_type='auto', dynamic=False):
         print(f"Loading data from {path}...")
 
         #TODO path length can't be None for auto as it's used for robot params before assigned
         #should be slightly higher to later allow robots wiht diffrent params such as higher acceleration or max_vel 
-        self.path_variables = ['x','y','theta','v','accel','delta'] if dynamic else ['x','y','theta']#  
+        self.path_variables = ['x','y','theta','v','accel','delta'] if dynamic else ['x','y']#  
         self.path_normalization = {
             'x': (0,15),
             'y': (0,15),
@@ -49,7 +137,7 @@ class PathDataset(Dataset):
         "mu_static": (0.05, 2.5),
         "width": (0.1, 1),
         "length": (0.1, 1),
-        "dt": (0.01, (0.1 *   256 ) / float(path_length))  # dt adjusted based on path length, the shortest path can be 10 times shorter than the longest
+        "dt": 0 # dt adjusted based on path length, the shortest path can be 10 times shorter than the longest
         }
 
         self.maps = []
@@ -103,11 +191,22 @@ class PathDataset(Dataset):
         #TODO can this acieve full speed on bools? > maps can't be bool as the convolution needs float 
         self.maps = torch.tensor(np.array(self.maps) ,dtype=torch.float32).unsqueeze(1) #(N,H,W)
         #chekc -1 
-    
-        self.path_length = max(len(p) for p in self.paths) if path_length is None else path_length
-        self.paths,dts = self.resample_path(self.paths,self.path_length ,self.path_variables, dt=0.01)
+        self.bspline = None 
+
+        path_type, path_len = path_type.split(':')[0]  , int(path_type.split(':')[1] if len(path_type.split(':')) >1 else  max(len(p) for p in self.paths))
+        self.path_length = path_len
+        if path_type == 'extend':
+            path_len =  max(len(p) for p in self.paths)
+            self.paths, dts = self.resample_path_extend_last_point(self.paths,path_len, self.path_variables, dt=0.01)
+        elif path_type == 'linear':
+            self.paths, dts = self.resample_path_linear(self.paths, path_len, self.path_variables, dt=0.01)
+        elif path_type == 'bspline':                           
+            self.paths,dts = self.resample_path_BSpline(self.paths, path_len, self.path_variables, dt=0.01)                                                     
+        else: #default cubic
+            self.paths,dts = self.resample_path_cubic(self.paths, path_len, self.path_variables, dt=0.01)
 
         # Normalize dts to robot_normalization['dt']
+        self.robot_normalization['dt'] =  (0.01, (0.2 *   256 ) / float(self.path_length))  #possibly 20 times shorter path than the longest 
         dt_min, dt_max = self.robot_normalization['dt']
         dts = torch.tensor(dts).float()
         dts = 2 * (dts - dt_min) / (dt_max - dt_min) - 1
@@ -119,7 +218,7 @@ class PathDataset(Dataset):
         self.paths = 2 * (self.paths - torch.tensor([ [self.path_normalization[var][0] for var in self.path_variables] ]).unsqueeze(-1)) / \
                          torch.tensor([ [self.path_normalization[var][1] - self.path_normalization[var][0] for var in self.path_variables] ]).unsqueeze(-1) - 1
         #TODO do robot normalization here instead of in the loop for faster loading 
-        
+        print('Path shape', self.paths.shape)        
         self.robots = torch.tensor(self.robots).float()
         if dynamic:
             self.robots = torch.cat([self.robots, dts.unsqueeze(1)], dim=1).float()  # Append dt to robot parameters
@@ -127,33 +226,6 @@ class PathDataset(Dataset):
 
         self.robot_dim = self.robots.shape[1]
         self.path_dim = self.paths.shape[1]
-        #TODO do wee need that?  f.e only flip verticaly ?  
-        # print("Augmenting Data (Flipping & Mirroring)...")
-        # for item in data:
-        #     m = torch.tensor(item['map'], dtype=torch.float32)      # [3, 64, 64]
-        #     p = torch.tensor(item['path'], dtype=torch.float32)     # [128, 2]
-            
-        #     # 1. Original
-        #     # self.maps.append(m)
-        #     # self.paths.append(p.transpose(0, 1))
-
-        #     # # 2. Flip Horizontal (Mirror width)
-        #     # # Flip map width (axis 2)
-        #     # m_flip = torch.flip(m, [2]) 
-        #     # p_flip = p.clone()
-        #     # # Invert X coordinate (since range is -1 to 1)
-        #     # p_flip[:, 0] = -p_flip[:, 0] 
-        #     # self.maps.append(m_flip)
-        #     # self.paths.append(p_flip.transpose(0, 1))
-            
-        #     # # 3. Flip Vertical (Mirror height)
-        #     # # Flip map height (axis 1)
-        #     # m_v = torch.flip(m, [1]) 
-        #     # p_v = p.clone()
-        #     # # Invert Y coordinate
-        #     # p_v[:, 1] = -p_v[:, 1] 
-        #     # self.maps.append(m_v)
-        #     # self.paths.append(p_v.transpose(0, 1))
             
         print(f"Training on {len(self.maps)} maps with {len(self.paths)} paths.", end='\n\n')
         print('Min dt', min(dts), 'max dt', max(dts))
@@ -165,21 +237,68 @@ class PathDataset(Dataset):
     def __getitem__(self, idx):
         return self.maps[self.map_indexes[idx]], self.robots[idx],self.paths[idx]
 
+    def resample_path_BSpline(self, paths, target_len, path_variables, dt=0.01):
+        print('resampling with B-Spline')
+        resampled_paths = []
+        dts = []
 
-    def resample_path(self, paths, target_len, path_variables, dt=0.01):
-        # TODO implement linear or sline interpolation b-spline 
-        # max_path_len = max(len(p) for p in self.paths)
-        # for i in range(len(self.paths)):
-        #     path = self.paths[i]
-        #     if len(path) < max_path_len:
-        #         last_point = path[-1]
-        #         padding = [last_point] * (max_path_len - len(path))
-        #         self.paths[i] = path + padding
+        for path in paths:
+            path_np = np.array(path)
+            current_len = len(path_np)
+            if current_len == target_len:
+                resampled_paths.append(path_np.tolist())
+                continue
+            bspline = BSpline(n=target_len, d=6, num_T_pts=len(path_np))
+            control_points, *_ = np.linalg.lstsq(bspline.N[0], path_np, rcond=None)
+            dts.append(dt * target_len / current_len)
+            resampled_paths.append(control_points)
         
+        return resampled_paths, dts
 
+    def resample_path_extend_last_point(self, paths, target_len, path_variables, dt=0.01):
+        resampled_paths = []
+        for path in paths:
+            resampled_paths.append(path + [path[-1]] * (target_len - len(path)))
+        
+        return resampled_paths, [dt] * len(paths)
+
+
+    def resample_path_linear(self, paths, target_len, path_variables, dt=0.01):
+        resampled_paths = []
+        dts = []
+        for path in paths:
+            path_np = np.array(path)
+            current_len = len(path_np)
+
+            if current_len == target_len:
+                resampled_paths.append(path_np.tolist())
+                continue
+
+            new_path = np.zeros((target_len, path_np.shape[1]))
+            for i in range(min(path_np.shape[1] - 1, len(path_variables))): # Loop through x, y, theta, v, accel, delta
+                #   path_variables = ['x','y','theta','v','accel','delta']
+                if path_variables[i] == 'theta' or path_variables[i] == 'delta':
+                    unwrapped_theta = np.unwrap(path_np[:, i])
+                    new_path[:, i] = np.interp(
+                        np.linspace(0, current_len - 1, target_len),
+                        np.arange(current_len),
+                        unwrapped_theta
+                    )
+                    new_path[:, i] = np.mod(new_path[:, i] + np.pi, 2 * np.pi) - np.pi
+                else:
+                    new_path[:, i] = np.interp(
+                        np.linspace(0, current_len - 1, target_len),
+                        np.arange(current_len),
+                        path_np[:, i]
+                    )
+            resampled_paths.append(new_path.tolist())
+            dts.append(dt * target_len / current_len)  # Append the fixed dt value for each path
+        
+        return resampled_paths, dts
+    def resample_path_cubic(self, paths, target_len, path_variables, dt=0.01):
         dts = []
         resampled_paths = []
-        for path in self.paths:
+        for path in paths:
             path_np = np.array(path)
             current_len = len(path_np)
 
@@ -235,11 +354,11 @@ class DiffusionManager:
         sqrt_one_minus_alpha = self.sqrt_one_minus_alphas_cumprod[t][:, None, None]
         return sqrt_alpha * x_start + sqrt_one_minus_alpha * noise, noise
 
-    def sample(self, model, map_cond,robot_params, real_path):
+    def sample(self, model, map_cond,robot_params, path_len, path_params_len):
         model.eval()
         with torch.no_grad():
             batch_size = map_cond.shape[0]
-            x = torch.randn((batch_size, real_path.shape[1], real_path.shape[2]), device=self.device)
+            x = torch.randn((batch_size, path_params_len, path_len), device=self.device)
             
             for i in reversed(range(self.timesteps)):
                 t = torch.full((batch_size,), i, device=self.device, dtype=torch.long)
@@ -281,7 +400,7 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 5,
+    'n_maps': 1,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
@@ -291,11 +410,11 @@ local_config = {
         'num_internal_layers': 4,
         'base_layer_dim': 128
     },
-    'map_resolution': 128,
-    'path_length': 256,
-    'dynamic': True,
+    'map_resolution': 500,
+    'dynamic': False,
     'weight_decay': 1e-4,
-    'dropout': 0.2
+    'dropout': 0.2,
+    'path_type':  'bspline:10' # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
 }
 
 def train():
@@ -306,7 +425,7 @@ def train():
     device = config.device
 
 
-    dataset = PathDataset(config.dataset_path,config.n_maps, config.map_resolution,config.path_length,config.dynamic)
+    dataset = PathDataset(config.dataset_path,config.n_maps, config.map_resolution, path_type=config.path_type,dynamic=config.dynamic)
 
 
     train_size = int(0.8 * len(dataset))
@@ -332,7 +451,7 @@ def train():
 
 
 
-    diff = DiffusionManager(timesteps=config.timesteps,beta_start=config.beta_start,beta_end=config.beta_end, device=device)
+    diff = DiffusionManager(timesteps=config.timesteps,beta_start=config.beta_start,beta_end=config.beta_end,device=device)
 
     #TODO only works for squere maps 
     model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim'], droupout=config.dropout).to(device) 
@@ -492,7 +611,7 @@ def visualize_results(model, diff, dataset, epoch,device,config,full_dataset=Non
     #TODO add simulated path from control using propaget function 
 
 
-    generated_path = diff.sample(model, map_tensor,robot, real_path).squeeze(0) 
+    generated_path = diff.sample(model, map_tensor,robot, real_path.shape[2], real_path.shape[1]).squeeze(0) 
     generated_path = generated_path if n > 1 else generated_path.unsqueeze(0)
     gen_path = generated_path.cpu().numpy() 
 
@@ -514,7 +633,8 @@ def visualize_results(model, diff, dataset, epoch,device,config,full_dataset=Non
 
         #TODO add plotting of the robot at start position of gt and generated path 
         robot_x, robot_y = real_path[i, 0, 0], real_path[i, 1, 0]
-        robot_theta = real_path[i, 2, 0]
+        #TODO calculate the theta from 2 adjecent points 
+        robot_theta = 0 #real_path[i, 2, 0]
         robot_width = ((robot[i, 6].item() + 1) / 2 * (1 - 0.1) + 0.1) / 15
         robot_length = ((robot[i, 7].item() + 1) / 2 * (1 - 0.1) + 0.1) / 15
 

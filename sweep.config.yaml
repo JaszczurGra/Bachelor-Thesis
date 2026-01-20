@@ -1,8 +1,8 @@
 program: src_model/train.py
-method: bayes
-metric:
-  name: val_loss
-  goal: minimize
+method: grid
+# metric:
+#   name: val_loss
+#   goal: minimize
 
 parameters:
   # --- Training Parameters to Sweep ---
@@ -13,11 +13,15 @@ parameters:
     # max: 1.0e-3
   
   batch_size:
-    values: [1024, 512, 256, 128]
+    # To maximize batch size without crashing, you need to set the largest possible batch size that fits in GPU memory for each model configuration.
+    # This cannot be done statically in YAML; you must implement dynamic batch size selection in your training script.
+    # Example: Remove batch_size from sweep and set it in src_model/train.py based on available memory and model size.
+    # If you want to sweep over batch sizes, use a range and handle OOM errors in your code:
+    value: [512,256]
 
   # --- Diffusion Parameters to Sweep ---
   timesteps:
-    values: 1000
+    value: 1000
   
   beta_start:
     distribution: log_uniform_values
@@ -35,18 +39,18 @@ parameters:
         value: 128
       
       map_feat_dim:
-        values: [256,512]
+        value: 256
       
       robot_feat_dim:
-        values: [256,512]
+        values: 256
       
       time_feat_dim:
         value: null # Fixed value
       num_internal_layers: 
-        values: [3,4,5]
+        values: [3,4]
     
   dynamic:
-    values: [true, false]
+    values: false
 
   epochs:
     value: 1500
@@ -72,8 +76,9 @@ parameters:
     distribution: log_uniform_values
     min: 1e-5
     max: 1e-3
-
-early_terminate:
-  type: hyperband
-  min_iter: 300 
-  eta: 2
+  path_type:
+    values: ['extend:-1', 'linear:128','linear:64','cubic:128','cubic:64', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
+# early_terminate:
+#   type: hyperband
+#   min_iter: 300 
+#   eta: 2
