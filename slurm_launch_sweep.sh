@@ -17,8 +17,8 @@ echo "Sweep ID: $SWEEP_ID"
 sbatch --array=0-3 --time=0-15:00:00 <<EOF
 #!/bin/bash
 #SBATCH --job-name=diffusion_planning_sweep
-#SBATCH --output=log/diffusion_planning_sweep_%A_%a.out
-#SBATCH --error=log/train_%j.err
+#SBATCH --output=log/diffusion_planning_sweep_%j_%a.out
+#SBATCH --error=log/diffusion_planning_sweep_%j.err
 #SBATCH --partition=tesla
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
