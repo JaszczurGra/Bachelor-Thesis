@@ -42,7 +42,7 @@ parameters:
         value: 256
       
       robot_feat_dim:
-        values: 256
+        value: 256
       
       time_feat_dim:
         value: null # Fixed value
