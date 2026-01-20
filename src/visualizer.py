@@ -29,6 +29,7 @@ class Visualizer:
         n_rows = math.ceil(self.n_plots / n_cols)
         
         self.fig, axs = plt.subplots(n_rows, n_cols)#, figsize=(5 * n_cols, 5 * n_rows))
+        #TODO ADD the thtile back
         # self.fig.suptitle(f'OMPL Car Planning - Continuous', fontsize=16)
         # fig.set_facecolor('#2e2e2e')
         # Flatten axes
@@ -70,7 +71,8 @@ class Visualizer:
                 if result['timestamp'] > self.last_timestamps[i]:
                     self.last_timestamps[i] = result['timestamp']
                     ax.set_visible(True)
- 
+
+                    print('drawing')
 
                     ax.cla()
                     ax.set_xlim(0, 10)
@@ -93,12 +95,13 @@ class Visualizer:
                         ax.text(1,0, legend_text, transform=ax.transAxes, 
                             verticalalignment='bottom',fontsize = self.font_size , horizontalalignment='right',
                             bbox=dict(boxstyle='round', facecolor='white', edgecolor='black', alpha=0.5))
-                    draw = True
+                    # draw = True
 
         if draw:
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
 
+    # def self.draw_all(self):
 
 
     def close(self):
@@ -175,7 +178,7 @@ if __name__ == "__main__":
 
         visualizer = Visualizer(n_plots=1)
         total_pages = len(all_results)
-
+        visualizer.fig.tight_layout()
         for i in range(total_pages):
 
             start_idx = i * 1
@@ -186,16 +189,16 @@ if __name__ == "__main__":
             for plot_idx in range(1):
                 result_idx = start_idx + plot_idx
                 if result_idx < end_idx:
-                    all_results[result_idx]['timestamp'] = datetime.now().timestamp()
+                    all_results[result_idx]['timestamp'] = i
                     all_results[result_idx]['run'] = result_idx + 1
                     result_list[plot_idx] = all_results[result_idx]
-            
+
             visualizer.update(result_list, args.params, custom_tile=['']*1)
-            visualizer.fig.savefig(os.path.join('path_visualizations', args.save, f'visualization+{map_idx[i*1]}.pdf'))
+            visualizer.fig.savefig(os.path.join('path_visualizations', args.save, f'visualization_{map_idx[i*1]}.pdf'))
         exit(0)
         
             
-
+    print('normalallal')
     
 
         
