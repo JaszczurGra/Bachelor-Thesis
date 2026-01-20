@@ -50,7 +50,7 @@ parameters:
         values: [3,4]
     
   dynamic:
-    values: false
+    value: false
 
   epochs:
     value: 1500
@@ -76,6 +76,7 @@ parameters:
     distribution: log_uniform_values
     min: 1e-5
     max: 1e-3
+
   path_type:
     values: ['extend:-1', 'linear:128','linear:64','cubic:128','cubic:64', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
 # early_terminate:
