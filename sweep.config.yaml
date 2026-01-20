@@ -17,7 +17,7 @@ parameters:
     # This cannot be done statically in YAML; you must implement dynamic batch size selection in your training script.
     # Example: Remove batch_size from sweep and set it in src_model/train.py based on available memory and model size.
     # If you want to sweep over batch sizes, use a range and handle OOM errors in your code:
-    values: [512,256]
+    value: [512,256]
 
   # --- Diffusion Parameters to Sweep ---
   timesteps:

@@ -410,7 +410,7 @@ local_config = {
         'num_internal_layers': 4,
         'base_layer_dim': 128
     },
-    'map_resolution': 500,
+    'map_resolution': 496, #must be multiple of 8 TODO interpolate down to multiples of 8
     'dynamic': False,
     'weight_decay': 1e-4,
     'dropout': 0.2,
