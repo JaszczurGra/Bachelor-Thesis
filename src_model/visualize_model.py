@@ -16,14 +16,16 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--run_url', type=str, required=True, help='WandB run URL to load the model from')
 parser.add_argument('-m', '--max_dataset_length', type=int, default=None, help='Maximum number of samples to load from the dataset')
 parser.add_argument('-n', '--num_plots', type=int, default=4, help='Number of plots in the path')
+#TODO make this a number to save n number of singular plots 
 parser.add_argument('--save_plots', action='store_true', help='Whether to save the plots as images instead of displaying them')
-
+parser.add_argument('--custom_dataset', type=str, default=None, help='Path to a custom dataset to visualize')
 args = parser.parse_args()
 
 matplotlib.use('Agg' if args.save_plots else 'TkAgg') 
 
 import matplotlib.pyplot as plt
 import re
+from matplotlib.patches import Polygon
 
 def parse_run_url(url):
     m = re.search(r"wandb\.ai/([^/]+)/([^/]+)/(?:sweeps/[^/]+/)?runs/([^/?]+)", url)
@@ -33,6 +35,170 @@ def parse_run_url(url):
         raise ValueError("Invalid wandb run URL format.")
 
 
+def renormalize_robot(robot_params, robot_normalization, robot_variables):
+    norm_ranges = np.array([robot_normalization[var][1] - robot_normalization[var][0] for var in robot_variables])
+    norm_mins = np.array([robot_normalization[var][0] for var in robot_variables])
+    renormalized = 0.5 * (robot_params + 1) * norm_ranges + norm_mins
+    return {key: value for key, value in zip(robot_variables, renormalized)}
+
+def check_validity(resampled_path, map_tensor, robot_params):
+    # Check if any point in the path collides with obstacles in the map
+    # resampled_path: [T, path_dim]
+    # map_tensor: [1, H, W]
+
+
+    # Compute the robot rectangle corners in normalized coordinates
+    robot_x, robot_y = resampled_path.T[0, 0], resampled_path.T[1, 0]
+    robot_theta = resampled_path.T[2, 0]
+    robot_width = ((robot_params[6] + 1) / 2 * (1 - 0.1) + 0.1) / 15
+    robot_length = ((robot_params[7] + 1) / 2 * (1 - 0.1) + 0.1) / 15
+
+    corners = np.array([
+        [-robot_length/2, -robot_width/2],
+        [robot_length/2, -robot_width/2],
+        [robot_length/2, robot_width/2],
+        [-robot_length/2, robot_width/2]
+    ])
+
+    cos_theta = np.cos(robot_theta)
+    sin_theta = np.sin(robot_theta)
+    rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+    rotated_corners = corners @ rotation_matrix.T
+    rotated_corners[:, 0] += robot_x
+    rotated_corners[:, 1] += robot_y
+
+    width, height = robot_width, robot_length
+
+    # Check if any pixel inside the rotated rectangle is an obstacle
+    H, W = map_tensor.shape[1], map_tensor.shape[2]
+    rect_path = MplPath(rotated_corners)
+    # Generate a grid of points covering the rectangle bounding box
+    min_x, max_x = rotated_corners[:, 0].min(), rotated_corners[:, 0].max()
+    min_y, max_y = rotated_corners[:, 1].min(), rotated_corners[:, 1].max()
+    x_grid = np.linspace(min_x, max_x, num=int(np.ceil((max_x-min_x)*W/2)))
+    y_grid = np.linspace(min_y, max_y, num=int(np.ceil((max_y-min_y)*H/2)))
+    xx, yy = np.meshgrid(x_grid, y_grid)
+    points = np.stack([xx.ravel(), yy.ravel()], axis=-1)
+    inside = rect_path.contains_points(points)
+    inside_points = points[inside]
+    if inside_points.shape[0] == 0:
+        return width, height  # fallback
+
+    x_normalized = (inside_points[:, 0] + 1) / 2
+    y_normalized = (inside_points[:, 1] + 1) / 2
+    x_indices = np.clip((x_normalized * (W - 1)).astype(int), 0, W - 1)
+    y_indices = np.clip((y_normalized * (H - 1)).astype(int), 0, H - 1)
+    for xi, yi in zip(x_indices, y_indices):
+        if map_tensor[0, yi, xi] < 0.5:
+            return width, height
+
+    path = resampled_path.T  # shape: [T, path_dim], assume x=0, y=1
+    H, W = map_tensor.shape[1], map_tensor.shape[2]
+    x_normalized = (path[:, 0] + 1) / 2  # Normalize to [0, 1]
+    y_normalized = (path[:, 1] + 1) / 2  # Normalize to [0, 1]
+    x_indices = np.clip((x_normalized * (W - 1)).astype(int), 0, W - 1)
+    y_indices = np.clip((y_normalized * (H - 1)).astype(int), 0, H - 1)
+
+    for xi, yi in zip(x_indices, y_indices):
+        if map_tensor[0, yi, xi] < 0.5:  # Assuming obstacle pixels are < 0.5
+            return False
+    return True
+
+
+def calculate_turning_radius(resampled_path):
+    # resampled_path: [T, path_dim]
+    # Calculate turning radius between three consecutive points
+    # For two points, we need a third to define a circle; so use a sliding window of 3
+    # Here, we compute radius for each triplet in the path
+    radii = []
+    # Transpose to shape [T, path_dim] if needed
+    path = resampled_path.T  # shape: [T, path_dim], assume x=0, y=1
+
+    # Vectorized calculation for turning radii (sum only, not individual radii)
+    # This avoids explicit Python loops for speed.
+    p1 = path[:-2, :2]
+    p2 = path[1:-1, :2]
+    p3 = path[2:, :2]
+
+    # Calculate determinants for each triplet
+    A = np.linalg.det(np.stack([
+        np.concatenate([p1, np.ones((p1.shape[0], 1))], axis=1),
+        np.concatenate([p2, np.ones((p2.shape[0], 1))], axis=1),
+        np.concatenate([p3, np.ones((p3.shape[0], 1))], axis=1)
+    ], axis=1))
+
+    # Avoid division by zero
+    mask = np.abs(A) >= 1e-8
+
+    B = -np.linalg.det(np.stack([
+        np.concatenate([(p1[:, 0]**2 + p1[:, 1]**2)[:, None], p1[:, 1:2], np.ones((p1.shape[0], 1))], axis=1),
+        np.concatenate([(p2[:, 0]**2 + p2[:, 1]**2)[:, None], p2[:, 1:2], np.ones((p2.shape[0], 1))], axis=1),
+        np.concatenate([(p3[:, 0]**2 + p3[:, 1]**2)[:, None], p3[:, 1:2], np.ones((p3.shape[0], 1))], axis=1)
+    ], axis=1))
+
+    C = np.linalg.det(np.stack([
+        np.concatenate([(p1[:, 0]**2 + p1[:, 1]**2)[:, None], p1[:, 0:1], np.ones((p1.shape[0], 1))], axis=1),
+        np.concatenate([(p2[:, 0]**2 + p2[:, 1]**2)[:, None], p2[:, 0:1], np.ones((p2.shape[0], 1))], axis=1),
+        np.concatenate([(p3[:, 0]**2 + p3[:, 1]**2)[:, None], p3[:, 0:1], np.ones((p3.shape[0], 1))], axis=1)
+    ], axis=1))
+
+    D = -np.linalg.det(np.stack([
+        np.concatenate([(p1[:, 0]**2 + p1[:, 1]**2)[:, None], p1[:, 0:1], p1[:, 1:2]], axis=1),
+        np.concatenate([(p2[:, 0]**2 + p2[:, 1]**2)[:, None], p2[:, 0:1], p2[:, 1:2]], axis=1),
+        np.concatenate([(p3[:, 0]**2 + p3[:, 1]**2)[:, None], p3[:, 0:1], p3[:, 1:2]], axis=1)
+    ], axis=1))
+
+    center_x = np.zeros_like(A)
+    center_y = np.zeros_like(A)
+    radius = np.full_like(A, np.inf)
+
+    center_x[mask] = -B[mask] / (2 * A[mask])
+    center_y[mask] = -C[mask] / (2 * A[mask])
+    radius[mask] = np.sqrt(center_x[mask]**2 + center_y[mask]**2 - D[mask] / A[mask])
+
+    # If you only want the sum:
+    # / path lenght
+    total_radius = np.sum(radius) / path.shape[0]
+
+
+    return total_radius
+    for i in range(1, path.shape[0] - 1):
+        p1 = path[i - 1][:2]
+        p2 = path[i][:2]
+        p3 = path[i + 1][:2]
+        # Calculate circle from three points
+        A = np.linalg.det([
+            [p1[0], p1[1], 1],
+            [p2[0], p2[1], 1],
+            [p3[0], p3[1], 1]
+        ])
+        if abs(A) < 1e-8:
+            radii.append(np.inf)
+            continue
+        B = -np.linalg.det([
+            [p1[0]**2 + p1[1]**2, p1[1], 1],
+            [p2[0]**2 + p2[1]**2, p2[1], 1],
+            [p3[0]**2 + p3[1]**2, p3[1], 1]
+        ])
+        C = np.linalg.det([
+            [p1[0]**2 + p1[1]**2, p1[0], 1],
+            [p2[0]**2 + p2[1]**2, p2[0], 1],
+            [p3[0]**2 + p3[1]**2, p3[0], 1]
+        ])
+        D = -np.linalg.det([
+            [p1[0]**2 + p1[1]**2, p1[0], p1[1]],
+            [p2[0]**2 + p2[1]**2, p2[0], p2[1]],
+            [p3[0]**2 + p3[1]**2, p3[0], p3[1]]
+        ])
+        center_x = -B / (2 * A)
+        center_y = -C / (2 * A)
+        radius = np.sqrt(center_x**2 + center_y**2 - D / A)
+        radii.append(radius)
+    return sum(np.array(radii)) / path.shape[0]
+    pass 
+
+#TODO paralize this for calcuation so only few maps are visualized and then all the others are just calculated 
+#TODO make batching 
 def visualize_results(model, diff, dataset,device, axes, idxs, dynamic=False):
     n = len(idxs)
     samples = [dataset[i] for i in idxs]
@@ -84,7 +250,11 @@ def visualize_results(model, diff, dataset,device, axes, idxs, dynamic=False):
         rotated_corners[:, 0] += robot_x
         rotated_corners[:, 1] += robot_y
 
-        ax.plot(rotated_corners[:, 0], rotated_corners[:, 1], 'b-', linewidth=2, label='Robot')
+        # Draw the robot as a filled rectangle (patch)
+        rect = Polygon(rotated_corners, closed=True, facecolor='cyan', edgecolor='b', alpha=0.5, label='Robot')
+        ax.add_patch(rect)
+
+        # ax.plot(rotated_corners[:, 0], rotated_corners[:, 1], 'b-', linewidth=2, label='Robot')
         ax.plot(gen_path[i,0,:], gen_path[i,1,:], 'r-', linewidth=2, label='Diffusion')
 
 
@@ -152,7 +322,14 @@ def simulate_path_cuda(path,robot_params, dataset):
     return path.cpu().numpy()
     
 
+import argparse
+from matplotlib.path import Path as MplPath
+
 if __name__ == "__main__":
+
+
+
+
 
     pared_url = parse_run_url(args.run_url)
     # print(f"Parsed url: {pared_url}")

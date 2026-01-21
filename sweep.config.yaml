@@ -55,7 +55,7 @@ parameters:
     value: false
 
   epochs:
-    value: 1500
+    value: 1000
   
   dataset_path:
     value: "slurm_data/slurm_19_01_8k"
