@@ -17,8 +17,7 @@ parameters:
     # This cannot be done statically in YAML; you must implement dynamic batch size selection in your training script.
     # Example: Remove batch_size from sweep and set it in src_model/train.py based on available memory and model size.
     # If you want to sweep over batch sizes, use a range and handle OOM errors in your code:
-    values: [512,256]
-
+    value: 64
   # --- Diffusion Parameters to Sweep ---
   timesteps:
     value: 1000
@@ -83,7 +82,8 @@ parameters:
     # max: 1e-3
 
   path_type:
-    values: ['extend', 'linear:128','linear:64','linear:15','cubic:128','cubic:64','cubic:15', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
+    value: 'extend' #['extend', 'linear:128','linear:64','linear:15','cubic:128','cubic:64','cubic:15', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
+    #values: ['extend', 'linear:128','linear:64','linear:15','cubic:128','cubic:64','cubic:15', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
 # early_terminate:
 #   type: hyperband
 #   min_iter: 300 

@@ -196,7 +196,6 @@ class PathDataset(Dataset):
         path_type, path_len = path_type.split(':')[0]  , int(path_type.split(':')[1] if len(path_type.split(':')) >1 else  max(len(p) for p in self.paths))
         self.path_length = path_len
         if path_type == 'extend':
-            path_len =  max(len(p) for p in self.paths)
             self.paths, dts = self.resample_path_extend_last_point(self.paths,path_len, self.path_variables, dt=0.01)
         elif path_type == 'linear':
             self.paths, dts = self.resample_path_linear(self.paths, path_len, self.path_variables, dt=0.01)
@@ -389,9 +388,9 @@ class DiffusionManager:
 
 local_config = {
     # batch size = 64 - approximately 5GB vram
-    "epochs": 2500,
-    "batch_size": 64*2 ,
-    "lr": 1e-4,
+    "epochs": 1000,
+    "batch_size": 64 ,
+    "lr": 1e-3,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     # "dataset_path": "slurm_data/singular_path",
@@ -400,7 +399,7 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 1,
+    'n_maps': 400,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
@@ -413,8 +412,8 @@ local_config = {
     'map_resolution': 496, #must be multiple of 8 TODO interpolate down to multiples of 8
     'dynamic': False,
     'weight_decay': 1e-4,
-    'dropout': 0.2,
-    'path_type':  'bspline:10' # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
+    'dropout': 0.25,
+    'path_type':  'extend' # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
 }
 
 def train():
