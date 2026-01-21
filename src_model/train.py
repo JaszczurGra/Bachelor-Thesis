@@ -463,9 +463,9 @@ def train():
         print("Resuming training from checkpoint!")
 
     optimizer = optim.Adam(model.parameters(), lr=config.lr,weight_decay=config.weight_decay)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.7, patience=50)
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.7, patience=50)
    #TODO swtich to readuce on platou?????
-    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs, eta_min=0)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs, eta_min=0)
     criterion = torch.nn.MSELoss()
     
     print(f"Starting Training on {device}...")
@@ -518,7 +518,7 @@ def train():
             # },
     
         # scheduler.step(avg_val_loss)
-        scheduler.step(avg_val_loss)
+        scheduler.step()
         print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}", end='\r')
         wandb.log({"train_loss": avg_train_loss,"best_val_loss": best_val_loss, "val_loss": avg_val_loss, "epoch": epoch,"learning_rate": optimizer.param_groups[0]['lr']})
         

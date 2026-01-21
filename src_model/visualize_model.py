@@ -151,44 +151,6 @@ def simulate_path_cuda(path,robot_params, dataset):
 
     return path.cpu().numpy()
     
-def simulate_path(path,robot_params, dataset):
-    
-
-    robot_params = {key: val for key, val in zip(dataset.robot_normalization, robot_params)}
-    
-    _lateral_force_min_v = math.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / math.tan(robot_params["max_steering_at_zero_v"]) ) 
-    result = [path[0]]
-    def propagate(state, control, result):
-     
-        """
-        State: [x, y, theta, v]
-        Control: [acceleration, steering_angle]
-        F_l= mvv/r < mu * g 
-        """
-        angle = math.copysign(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / state[3]**2, control[1])  if state[3] >= _lateral_force_min_v else math.tan(np.clip(control[1], -robot_params["max_steering_at_zero_v"], robot_params["max_steering_at_zero_v"]))
-        # self._debug_counter += 1
-        # if self._debug_counter % 100 == 0:
-        #     print(angle, math.atan(angle) * 180/math.pi)
-            # print(self._debug_counter / 1000000 , 'MIL propagation steps')
-        result[0] =  state[3] * math.cos(state[2])  
-        result[1] = state[3] * math.sin(state[2])  
-        # result[2] = (state[3] / self.robot.wheelbase) * math.tan(np.clip(control[1], -MAX_DELTA, MAX_DELTA)) 
-        result[2] = (state[3] / robot_params["wheelbase"]) *  angle 
-        result[3] = control[0]
-
-    for i in range(1, len(path)-1):
-        state = result[-1][:4]  # [x, y, theta, v]
-        control = path[i][4:6]  # [acceleration, delta]
-        next_state = [0, 0, 0, 0]
-        propagate(state, control, next_state)
-        new_x = state[0] + next_state[0] * dt
-        new_y = state[1] + next_state[1] * dt
-        new_theta = state[2] + next_state[2] * dt
-        new_v = state[3] + next_state[3] * dt
-        result.append([new_x, new_y, new_theta, new_v] + path[i][4:].tolist())
-
-    return result
-
 
 if __name__ == "__main__":
 

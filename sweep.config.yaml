@@ -83,7 +83,7 @@ parameters:
     # max: 1e-3
 
   path_type:
-    values: ['extend', 'linear:128','linear:64','cubic:128','cubic:64', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
+    values: ['extend', 'linear:128','linear:64','linear:15','cubic:128','cubic:64','cubic:15', 'bspline:10','bspline:15'] # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
 # early_terminate:
 #   type: hyperband
 #   min_iter: 300 
