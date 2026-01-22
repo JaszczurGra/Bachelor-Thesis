@@ -78,7 +78,7 @@ class MapGenerator(BaseMapGenerator):
 
 
 if __name__ == "__main__":
-    gen = NoiseMapGenerator(1000, 1000)
+    gen = MapGenerator(1000, 1000)
     
     print(f"Previewing random rectangle maps...")
     

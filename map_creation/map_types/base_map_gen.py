@@ -24,6 +24,12 @@ class BaseMapGenerator:
     def random_scaled_w(self, l, h ):
         return random.randint(int(l * self.width), int(h * self.width))
 
+    def scale_h(self, val):
+        return int(val * self.height)
+    def scale_w(self, val):
+        return int(val * self.width)
+
+
     def save_map(self, img, folder, filename):
         if not os.path.exists(folder):
             os.makedirs(folder)
