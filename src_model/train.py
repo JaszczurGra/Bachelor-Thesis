@@ -193,7 +193,7 @@ class PathDataset(Dataset):
         #chekc -1 
         self.bspline = None 
 
-        self.original_paths = torch.tensor(self.paths) #keep original for visualization
+        self.original_paths = np.array(self.paths,dtype=object) #keep original for visualization
 
         path_type, path_len = path_type.split(':')[0]  , int(path_type.split(':')[1] if len(path_type.split(':')) >1 else  max(len(p) for p in self.paths))
         self.path_length = path_len

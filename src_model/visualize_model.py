@@ -24,18 +24,18 @@ parser.add_argument('--n_viz', type=int, default=5, help='Number of visualizatio
 
 parser.add_argument('-n', '--num_plots', type=int, default=1, help='Number of plots in the path')
 #TODO make this a number to save n number of singular plots 
-parser.add_argument('--save_plots', action='store_true', help='Whether to save the plots as images instead of displaying them')
+parser.add_argument('--save', action='store_true', help='Whether to save the plots as images instead of displaying them')
 parser.add_argument('--custom_dataset', type=str, default=None, help='Path to a custom dataset to visualize')
 args = parser.parse_args()
 
-matplotlib.use('Agg' if args.save_plots else 'TkAgg') 
+matplotlib.use('Agg' if args.save else 'TkAgg') 
 
 import matplotlib.pyplot as plt
 import re
 from matplotlib.patches import Polygon
 
 def parse_run_url(url):
-    m = re.search(r"wandb\.ai/([^/]+)/([^/]+)/(?:sweeps/[^/]+/)?runs/([^/?]+)", url)
+    m = re.search(r"wandb\.ai/([^/]+)/([^/]+)/(?:sweeps/[^/]+/)?runs/([^/?]+)", url)    if 'runs' in url else re.search(r"wandb\.ai/([^/]+)/([^/]+)/sweeps/([^/?#]+)", url)
     if m:
         return f"{m.group(1)}/{m.group(2)}/{m.group(3)}"
     else:
@@ -49,7 +49,7 @@ def renormalize_robot(robot_params, robot_normalization, robot_variables):
     norm_ranges = np.array([robot_normalization[var][1] - robot_normalization[var][0] for var in robot_variables])
     norm_mins = np.array([robot_normalization[var][0] for var in robot_variables])
     renormalized = 0.5 * (robot_params + 1) * norm_ranges + norm_mins
-    return {key: value for key, value in zip(robot_variables, renormalized)}
+    return {var: renormalized[:, i] for i, var in enumerate(robot_variables)}
 
 
 def calculate_path_length(resampled_paths):
@@ -57,6 +57,7 @@ def calculate_path_length(resampled_paths):
     #returns length in normalized cords to denormilize * 15 ^ 2
     lengths = []
     for path in resampled_paths:
+        path = np.array(path)  # shape [N, 2]
         length = 0.0
         for i in range(1, path.shape[0]):
             segment = path[i, :2] - path[i - 1, :2]
@@ -72,34 +73,35 @@ def calculate_validity_collisions(resampled_paths, map_tensors, robot_params_nor
     # returns collision count in [0,1] for each path
     collision_counts = []
     for i in range(len(resampled_paths)):
-        path = resampled_paths[i]  # shape [2, L]
-        map_img = map_tensors[i]   # shape [496, 496]
-        width = robot_params_normalized[i]['width']
+        path = np.array(resampled_paths[i])  # shape [N,2]
+        map_img = map_tensors[i][0]   # shape [496, 496]
+        width = robot_params_normalized['width'][i]
         # length = robot_params_normalized[i]['length']
 
-        path = path.T  # (N, 2)
-        img = np.zeros(map_img.shape, dtype=np.uint8)
+
+        img = np.zeros((map_img.shape[0], map_img.shape[1]), dtype=np.uint8)
     
         #TODO should be extended by length 
-        pts = np.round((path * 0.5 + 0.5 ) * map_img.shape[0]).astype(int)
-
+        pts = np.round((path[:, :2] * 0.5 + 0.5 ) * map_img.shape[0]).astype(int)
 
         #TODO rounding to int is not accuarate
+        #Needs [2,N]?
         thickness = max(1, int(width *  map_img.shape[0] / 15))
-        cv2.polylines(img, [pts], isClosed=False, color=1, thickness=thickness)
+        cv2.polylines(img, [pts.reshape((-1, 1, 2))], isClosed=False, color=1, thickness=thickness)
 
         collisions = np.sum((map_img == 0) & (img == 1))
       
-        collision_counts.append(collisions / map_tensors.shape[0] / map_tensors.shape[1])  
+        collision_counts.append(collisions / map_img.shape[0] / map_img.shape[1])  
+    print('Collisions:', collision_counts)
     return collision_counts
 
-def calculate_turning_radius(resampled_path):
+def calculate_turning_radius(resampled_paths):
     #TODO not finished yet
-    resampled_paths= resampled_path
+
     avg_bending_energies = [] 
     avg_curvatures = [] 
     for path in resampled_paths:
-        path = path.T # (N, 2)
+        path = np.array(path)  # shape [N, 2]
         # Initialize arrays with 'inf' for radius and 0 for curvature
         bending_energy_sum = 0 
         curvature_sum = 0 
@@ -131,9 +133,11 @@ def calculate_turning_radius(resampled_path):
     avg_curvatures.append(curvature_sum / (len(path) - 2))
 
     return avg_curvatures, avg_bending_energies
-
-def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths, generated_paths, resampled_paths):
-    def draw_robot(path,i):
+visualized = 0
+def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths, generated_paths, resampled_paths,axes,save_dir):
+    # N, 2 
+    def draw_robot(paths,i):
+        path = np.array(paths[i])
         robot_width = robot_params_renormalized['width'][i]
         robot_length = robot_params_renormalized['length'][i]
         corners = np.array([
@@ -145,34 +149,38 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths
         ])
 
         #show work coretly no mater if normalized or not 
-        theta = math.atan2(path[1,1] - path[0,1],path[1,0] - path[0,0])
+        theta = math.atan2(path[1][1] - path[0][1],path[1][0] - path[0][0])
 
         cos_theta = np.cos(theta)
         sin_theta = np.sin(theta)
         rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
         rotated_corners = corners @ rotation_matrix.T
-        rotated_corners[:, 0] += (path[0,0] + 1) * 7.5
-        rotated_corners[:, 1] += (path[0,1] + 1) * 7.5
+        rotated_corners[:, 0] += (path[0][0] + 1) * 7.5
+        rotated_corners[:, 1] += (path[0][1] + 1) * 7.5
 
         rect = Polygon(rotated_corners, closed=True, facecolor='green', edgecolor='b', alpha=0.5, label='Robot')
         axes[i].add_patch(rect)
 
-    def plot_path(path, i, style, label):
-        if path is not None:
-            x = (path[0, :] + 1) * 7.5
-            y = (path[1, :] + 1) * 7.5
+    def plot_path(paths, i, style, label):
+        if paths is not None:
+            path = np.array(paths[i])
+            x = (path[:][ 0] + 1) * 7.5
+            y = (path[:][1] + 1) * 7.5
             axes[i].plot(x, y, style, linewidth=2, label=label)
 
-    def plot_points(path, i, style, label):
-        if path is not None:
-            x = (path[0, :] + 1) * 7.5
-            y = (path[1, :] + 1) * 7.5
-            axes[i].scatter(x, y, style, label=label)
+    def plot_points(paths, i, label):
+        if paths is not None:
+            path = np.array(paths[i])
+            print(path)
+            x = (path[:][0] + 1) * 7.5
+            y = (path[:][1] + 1) * 7.5
+            axes[i].scatter(x, y, color='r', marker='o', label=label)
 
-
+    global visualized
     drawn = 0
     while visualized < args.n_viz and  drawn + args.num_plots <= len(maps):
         for i in range(args.num_plots):
+            #TODO this will only loop through 4 and then repeast the same maps and not go forward 
             axes[i].clear()
             axes[i].imshow(maps[i, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
             # axes[i].imshow(maps[i, 0], cmap='gray', extent=[-1, 1, -1, 1], origin='lower')
@@ -185,13 +193,13 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths
             # axes[i].set_ylabel("Y [m]")
         
 
-            x, y = real_paths[i, 0, 0], real_paths[i, 1, 0]
-            draw_robot(x,y)
-            plot_path(real_paths[i],i ,'g--', 'GT')
-            plot_path(resampled_paths[i], i,'b-', 'Resampled')
-            plot_path(dynamic_paths[i], i,'m-', 'Dynamic Simulated')
+            #TODO switch from [i] to passing whole array 
+            draw_robot(real_paths,i)
+            plot_path(real_paths,i ,'g--', 'GT')
+            plot_path(resampled_paths, i,'b-', 'Resampled')
+            plot_path(dynamic_paths, i,'m-', 'Dynamic Simulated')
 
-            plot_points(generated_paths[i],i ,'r-', 'Generated points')
+            plot_points(generated_paths,i , 'Generated points')
             
 
             
@@ -199,8 +207,8 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths
             axes[i].set_title('')
             drawn += 1
 
-        if args.save_plots:
-            plt.savefig(f"{save_dir}/visualization_{visualized}.png")
+        if args.save:
+            plt.savefig(f"{save_dir}/visualization_{visualized}.pdf")
         else:
             plt.show(block=False)
             plt.pause(0.1)
@@ -307,13 +315,19 @@ BATCH_SIZE = 16
 
 
 def visualize_model(run):
+    if run.state == 'failed':
+        print(f"Skipping failed run: {run.name}")
+        return
+
+    print(f"Visualizing results for run: {run.name}")
+
     config = run.config
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     dynamic = config.get('dynamic', False)
 
     n_maps = config["n_maps"] if args.max_dataset_length is None else min(config["n_maps"], args.max_dataset_length)
-    dataset = PathDataset(config["dataset_path"], n_maps, config["map_resolution"], config["path_length"],dynamic)
+    dataset = PathDataset(config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', None),dynamic)
     #TODO nadpisac mape zeby byl na tych co nie widzial na jakis inny folder
 
     diff = DiffusionManager(
@@ -336,20 +350,9 @@ def visualize_model(run):
         verbose=False
     ).to(device)
     if os.path.exists(best_model_path):
+        print('DIDN"T LOAD MODEL IT"S NOT LOCALY SAVED')
         vis_model.load_state_dict(torch.load(best_model_path))
-    # # print(run.config)
 
-    # n_maps = config.n_maps if args.max_dataset_length is None else min(config.n_maps, args.max_dataset_length) 
-    # dataset = PathDataset(config.dataset_path,n_maps, config.map_resolution,config.path_length)
-    # # dynamic=config.get('dynamic', False)
-    # diff = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim'], verbose=False).to(device)
-
-
-    # best_model_path = os.path.join('models', run.name , 'best_model_checkpoint.pth')
-    # vis_model = DiffusionDenoiser(state_dim=dataset.path_dim,robot_param_dim=dataset.robot_dim,map_size=dataset.maps.shape[2], map_feat_dim=config.model['map_feat_dim'], robot_feat_dim=config.model['robot_feat_dim'], time_feat_dim=config.model['time_feat_dim'], num_internal_layers=config.model['num_internal_layers'], base_layer_dim=config.model['base_layer_dim'], verbose=False).to(device)
-    # if os.path.exists(best_model_path):
-    #     vis_model.load_state_dict(torch.load(best_model_path))
-    print(f"Visualizing results for run: {run.name}")
     print('Dynamic:',dynamic, end='\n\n')
     n =  args.num_plots
     cols = math.ceil(math.sqrt(n))
@@ -360,7 +363,7 @@ def visualize_model(run):
     plt.tight_layout()
 
     save_dir = f"visualizations/{run.name}"
-    if args.save_plots:
+    if args.save:
         os.makedirs(save_dir, exist_ok=True)
 
     collisons_original = []
@@ -377,20 +380,26 @@ def visualize_model(run):
     for b in range(0, len(dataset), BATCH_SIZE):
         batch_idxs = list(range(b, min(b + BATCH_SIZE, len(dataset))))
         map_tensors, robots_params, sampled_paths  = [torch.stack(tensors) for tensors in zip(*[dataset[i] for i in batch_idxs])]
-        original_paths = np.transpose(dataset.original_paths[batch_idxs].cpu().numpy(), (0, 2, 1))
+        original_paths = dataset.original_paths[batch_idxs]  # [B, path_len, path_dim]
+        # Normalize each path: (x / 7.5) - 1 for all path_dim
+        normalized_original_paths = []
+        for path in original_paths:
+            norm_path = (np.array(path) / 7.5) - 1
+            normalized_original_paths.append(norm_path)
+        original_paths = normalized_original_paths
 
-        generated_path = diff.sample(vis_model, map_tensors,robots_params, sampled_paths.shape[2], sampled_paths.shape[1]).squeeze(0) 
-        generated_path = generated_path if n > 1 else generated_path.unsqueeze(0)
+        generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1]).squeeze(0) 
+        generated_path = generated_path if n > 1 else generated_path
 
 
 
         robot_params_renormalized = renormalize_robot(robots_params, dataset.robot_normalization, dataset.robot_variables)
-
-
+        print('genereted', generated_path.shape,'sampled', sampled_paths.shape,'map',    map_tensors.shape,'og', original_paths.shape)
         map_tensors = map_tensors.cpu().numpy()
-        sampled_paths = sampled_paths.cpu().numpy()
-        generated_path = generated_path.cpu().numpy()
+        sampled_paths = np.transpose(sampled_paths.cpu().numpy(), (0, 2, 1))
+        generated_path = np.transpose(generated_path.cpu().numpy(), (0, 2, 1))
         resampled_paths = resample_paths(generated_path, config.get('path_type', ''), original_paths)
+        #TODO not sure if this doesnt need .T 
         dynamic_paths = simulate_path_cuda(generated_path,robots_params, dataset) if dynamic else None 
 
         collisons_original.extend(calculate_validity_collisions(original_paths, map_tensors, robot_params_renormalized))
@@ -404,18 +413,18 @@ def visualize_model(run):
         path_lengths_original.extend(calculate_path_length(original_paths))
         path_lengths_model.extend(calculate_path_length(resampled_paths))
 
-        visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, generated_path, sampled_paths)
+        visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, generated_path, sampled_paths,axes=axes, save_dir=save_dir)
 
 
 
 
-    if args.save_plots:
+    if args.save:
         with open(f"{save_dir}/metrics.txt", 'w') as f:
             f.write('MODEL: \n')
-            f.write(f"Average Path Length: {np.mean(path_lengths_model):.8f}\n\n")
+            f.write(f"Average Path Length: {np.mean(path_lengths_model):.8f}\n")
             f.write(f"Collision Rate: {np.mean(collisons_model):.8f}\n")
             f.write(f"Average Curvature: {np.mean(curvatures_model):.8f}\n")
-            f.write(f"Average Bending Energy: {np.mean(bending_energies_model):.8f}\n")
+            f.write(f"Average Bending Energy: {np.mean(bending_energies_model):.8f}\n\n")
             f.write('ORIGINAL: \n')
             f.write(f"Average Path Length: {np.mean(path_lengths_original):.8f}\n")
             f.write(f"Collision Rate: {np.mean(collisons_original):.8f}\n")
@@ -441,6 +450,10 @@ if __name__ == "__main__":
 
    
     api = wandb.Api()
-    run = api.run(pared_url) 
-    visualize_model(run)
-  
+
+    if 'runs' in args.run_url:
+        visualize_model(api.run(parse_run_url(args.run_url)) )
+    else:
+        sweep = api.sweep(parse_run_url(args.run_url))
+        for run in sweep.runs:
+            visualize_model(run)
