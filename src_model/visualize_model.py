@@ -18,14 +18,15 @@ import cv2 #opencv-python
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_url', type=str, required=True, help='WandB run URL to load the model from')
 parser.add_argument('-m', '--max_dataset_length', type=int, default=None, help='Maximum number of samples to load from the dataset for debuging')
+parser.add_argument('--custom_dataset', type=str, default=None, help='Path to a custom dataset to visualize')
 
+parser.add_argument('--n_viz', type=int, default=300, help='Number of visualizations imgs to generate ')
 
-parser.add_argument('--n_viz', type=int, default=40, help='Number of visualizations imgs to generate ')
-
-parser.add_argument('-n', '--num_plots', type=int, default=4, help='Number of plots in the path')
+parser.add_argument('-n', '--num_plots', type=int, default=1, help='Number of plots in the path')
 #TODO make this a number to save n number of singular plots 
 parser.add_argument('--save', action='store_true', help='Whether to save the plots as images instead of displaying them')
-parser.add_argument('--custom_dataset', type=str, default=None, help='Path to a custom dataset to visualize')
+
+parser.add_argument('--batch_size', type=int, default=512, help='Batch size for processing paths')
 args = parser.parse_args()
 
 matplotlib.use('Agg' if args.save else 'TkAgg') 
@@ -139,6 +140,9 @@ def calculate_turning_radius(resampled_paths):
     return avg_curvatures, avg_bending_energies
 visualized = 0
 def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths, model_path_points,axes,save_dir):
+
+
+    
     # N, 2 
     def draw_robot(paths,index, i):
         path = np.array(paths[index])
@@ -322,8 +326,11 @@ def resample_paths(paths, path_type, original_paths):
 import argparse
 from matplotlib.path import Path as MplPath
 
-BATCH_SIZE = 16
+CPU_COUNT =  os.cpu_count() - 1 if os.cpu_count() is not None else 2  #TODO set it up better 
+from multiprocessing import Pool
 
+def resample_single_path(path, path_type, original_path):
+    return resample_paths([path], path_type, [original_path])[0]
 
 def visualize_model(run, sweep_name=None):
     if run.state == 'failed':
@@ -338,8 +345,10 @@ def visualize_model(run, sweep_name=None):
     dynamic = config.get('dynamic', False)
 
     n_maps = config["n_maps"] if args.max_dataset_length is None else min(config["n_maps"], args.max_dataset_length)
-    dataset = PathDataset(config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', None),dynamic)
-    #TODO nadpisac mape zeby byl na tych co nie widzial na jakis inny folder
+    
+    dataset = PathDataset(args.custom_dataset if args.custom_dataset is not None else config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', None),dynamic)
+
+    start_time = datetime.datetime.now()
 
     diff = DiffusionManager(
         timesteps=config["timesteps"],
@@ -369,6 +378,7 @@ def visualize_model(run, sweep_name=None):
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
     # set n of subplots to n 
+    #TODO move this into the visualize to open new one 
     fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5))
     axes = axes.flatten() if n > 1 else [axes]
     plt.tight_layout()
@@ -390,9 +400,11 @@ def visualize_model(run, sweep_name=None):
     global visualized
     visualized = 0
 
+    print('Loaded dataset')
+
     #TODO parallize calculations 
-    for b in range(0, len(dataset), BATCH_SIZE):
-        batch_idxs = list(range(b, min(b + BATCH_SIZE, len(dataset))))
+    for b in range(0, len(dataset), args.batch_size):
+        batch_idxs = list(range(b, min(b + args.batch_size, len(dataset))))
         map_tensors, robots_params, sampled_paths  = [torch.stack(tensors) for tensors in zip(*[dataset[i] for i in batch_idxs])]
         original_paths = dataset.original_paths[batch_idxs]  # [B, path_len, path_dim]
         # Normalize each path: (x / 7.5) - 1 for all path_dim
@@ -410,28 +422,74 @@ def visualize_model(run, sweep_name=None):
         map_tensors = map_tensors.cpu().numpy()
         sampled_paths = np.transpose(sampled_paths.cpu().numpy(), (0, 2, 1))
         generated_path = np.transpose(generated_path.cpu().numpy(), (0, 2, 1))
-        resampled_paths = resample_paths(generated_path, config.get('path_type', ''), original_paths)
+        
+        #TODO paralize this 
+
 
         #TODO not sure if this doesnt need .T 
         dynamic_paths = simulate_path_cuda(generated_path,robots_params, dataset) if dynamic else None 
 
-        collisons_original.extend(calculate_validity_collisions(original_paths, map_tensors, robot_params_renormalized))
-        collisons_model.extend(calculate_validity_collisions(resampled_paths, map_tensors, robot_params_renormalized))
-        curvatures, bending_energies = calculate_turning_radius(original_paths)
-        curvatures_original.extend(curvatures)
-        bending_energies_original.extend(bending_energies)
-        curvatures, bending_energies = calculate_turning_radius(resampled_paths)
-        curvatures_model.extend(curvatures)
-        bending_energies_model.extend(bending_energies)
-        path_lengths_original.extend(calculate_path_length(original_paths))
-        path_lengths_model.extend(calculate_path_length(resampled_paths))
 
 
-        #TODO is the collison for model path's correct 
-        #TODO rework GT not drawing properly 
 
 
-        visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
+        # if CPU_COUNT == 1:
+        #     resampled_paths = resample_paths(generated_path, config.get('path_type', ''), original_paths)
+        #     collisons_original.extend(calculate_validity_collisions(original_paths, map_tensors, robot_params_renormalized))
+        #     collisons_model.extend(calculate_validity_collisions(resampled_paths, map_tensors, robot_params_renormalized))
+        #     curvatures, bending_energies = calculate_turning_radius(original_paths)
+        #     curvatures_original.extend(curvatures)
+        #     bending_energies_original.extend(bending_energies)
+        #     curvatures, bending_energies = calculate_turning_radius(resampled_paths)
+        #     curvatures_model.extend(curvatures)
+        #     bending_energies_model.extend(bending_energies)
+        #     path_lengths_original.extend(calculate_path_length(original_paths))
+        #     path_lengths_model.extend(calculate_path_length(resampled_paths))
+        #     visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
+        # else:
+        #     #rebatching 
+        with Pool(CPU_COUNT) as pool:
+            # Resample paths in parallel for each path if needed
+            resampled_paths = pool.starmap(
+                resample_single_path,
+                [(generated_path[i], config.get('path_type', ''), original_paths[i]) for i in range(len(generated_path))]
+            )
+
+            for result in pool.starmap(calculate_path_length, [( [original_paths[i]], ) for i in range(len(original_paths))]):
+                path_lengths_original.extend(result)
+            for result in pool.starmap(calculate_path_length, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))]):
+                path_lengths_model.extend(result)
+
+            for result in pool.starmap(calculate_validity_collisions, [( [original_paths[i]], map_tensors[i:i+1], {k: np.array([v[i]]) for k, v in robot_params_renormalized.items()} ) for i in range(len(original_paths))]):
+                collisons_original.extend(result)
+            for result in pool.starmap(calculate_validity_collisions, [( [resampled_paths[i]], map_tensors[i:i+1], {k: np.array([v[i]]) for k, v in robot_params_renormalized.items()} ) for i in range(len(resampled_paths))]):
+                collisons_model.extend(result)
+            for curvatures, bending_energies in pool.starmap(calculate_turning_radius, [( [original_paths[i]], ) for i in range(len(original_paths))]):
+                curvatures_original.extend(curvatures)
+                bending_energies_original.extend(bending_energies)
+            for curvatures, bending_energies in pool.starmap(calculate_turning_radius, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))]):
+                curvatures_model.extend(curvatures)
+                bending_energies_model.extend(bending_energies)
+
+            # collisons_original.extend(pool.starmap(calculate_validity_collisions, [( [original_paths[i]], map_tensors[i:i+1], {k: np.array([v[i]]) for k, v in robot_params_renormalized.items()} ) for i in range(len(original_paths))]))
+            # collisons_model.extend(pool.starmap(calculate_validity_collisions, [( [resampled_paths[i]], map_tensors[i:i+1], {k: np.array([v[i]]) for k, v in robot_params_renormalized.items()} ) for i in range(len(resampled_paths))]))
+            # curvatures_bending = pool.starmap(calculate_turning_radius, [( [original_paths[i]], ) for i in range(len(original_paths))])
+            # for curvatures, bending_energies in curvatures_bending:
+            #     curvatures_original.extend(curvatures)
+            #     bending_energies_original.extend(bending_energies)
+            # curvatures_bending = pool.starmap(calculate_turning_radius, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))])
+            # for curvatures, bending_energies in curvatures_bending:
+            #     curvatures_model.extend(curvatures)
+            #     bending_energies_model.extend(bending_energies)
+            # path_lengths_original.extend(pool.starmap(calculate_path_length, [( [original_paths[i]], ) for i in range(len(original_paths))]))
+            # path_lengths_model.extend(pool.starmap(calculate_path_length, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))]))
+            visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
+            # print(path_lengths_model,collisons_model, curvatures_model, bending_energies_model)
+    dt = datetime.datetime.now() - start_time
+    print(f"Visualization completed in {dt}")
+
+
+
 
 
 
@@ -458,8 +516,10 @@ def visualize_model(run, sweep_name=None):
 
 
     pass 
+import datetime
 
 if __name__ == "__main__":
+
 
 
 
@@ -470,6 +530,8 @@ if __name__ == "__main__":
    
     api = wandb.Api()
 
+
+
     if 'runs' in args.run_url:
         visualize_model(api.run(parse_run_url(args.run_url)) )
     else:
@@ -478,3 +540,6 @@ if __name__ == "__main__":
         print(f"Sweep name: {sweep_name}")
         for run in sweep.runs:
             visualize_model(run, sweep_name)
+
+
+    
