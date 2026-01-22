@@ -17,12 +17,12 @@ import cv2 #opencv-python
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_url', type=str, required=True, help='WandB run URL to load the model from')
-parser.add_argument('-m', '--max_dataset_length', type=int, default=None, help='Maximum number of samples to load from the dataset')
+parser.add_argument('-m', '--max_dataset_length', type=int, default=None, help='Maximum number of samples to load from the dataset for debuging')
 
 
-parser.add_argument('--n_viz', type=int, default=5, help='Number of visualizations imgs to generate ')
+parser.add_argument('--n_viz', type=int, default=40, help='Number of visualizations imgs to generate ')
 
-parser.add_argument('-n', '--num_plots', type=int, default=1, help='Number of plots in the path')
+parser.add_argument('-n', '--num_plots', type=int, default=4, help='Number of plots in the path')
 #TODO make this a number to save n number of singular plots 
 parser.add_argument('--save', action='store_true', help='Whether to save the plots as images instead of displaying them')
 parser.add_argument('--custom_dataset', type=str, default=None, help='Path to a custom dataset to visualize')
@@ -33,6 +33,9 @@ matplotlib.use('Agg' if args.save else 'TkAgg')
 import matplotlib.pyplot as plt
 import re
 from matplotlib.patches import Polygon
+
+#TODO vis goes over efvery map and path in order so to have diffrent ones it doesnt work 
+
 
 def parse_run_url(url):
     m = re.search(r"wandb\.ai/([^/]+)/([^/]+)/(?:sweeps/[^/]+/)?runs/([^/?]+)", url)    if 'runs' in url else re.search(r"wandb\.ai/([^/]+)/([^/]+)/sweeps/([^/?#]+)", url)
@@ -92,7 +95,7 @@ def calculate_validity_collisions(resampled_paths, map_tensors, robot_params_nor
         collisions = np.sum((map_img == 0) & (img == 1))
       
         collision_counts.append(collisions / map_img.shape[0] / map_img.shape[1])  
-    print('Collisions:', collision_counts)
+    # print('Collisions:', collision_counts)
     return collision_counts
 
 def calculate_turning_radius(resampled_paths):
@@ -129,15 +132,16 @@ def calculate_turning_radius(resampled_paths):
                 k = (4 * area) / (a * b * c)
                 bending_energy_sum += k  *  k
                 curvature_sum += k
-    avg_bending_energies.append(bending_energy_sum / (len(path) - 2))
-    avg_curvatures.append(curvature_sum / (len(path) - 2))
+
+        avg_bending_energies.append(bending_energy_sum / (len(path) - 2))
+        avg_curvatures.append(curvature_sum / (len(path) - 2))
 
     return avg_curvatures, avg_bending_energies
 visualized = 0
-def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths, generated_paths, resampled_paths,axes,save_dir):
+def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths, model_path_points,axes,save_dir):
     # N, 2 
-    def draw_robot(paths,i):
-        path = np.array(paths[i])
+    def draw_robot(paths,index, i):
+        path = np.array(paths[index])
         robot_width = robot_params_renormalized['width'][i]
         robot_length = robot_params_renormalized['length'][i]
         corners = np.array([
@@ -161,58 +165,65 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, real_paths
         rect = Polygon(rotated_corners, closed=True, facecolor='green', edgecolor='b', alpha=0.5, label='Robot')
         axes[i].add_patch(rect)
 
-    def plot_path(paths, i, style, label):
+    def plot_path(paths, index, i, style, label):
         if paths is not None:
-            path = np.array(paths[i])
-            x = (path[:][ 0] + 1) * 7.5
-            y = (path[:][1] + 1) * 7.5
+            path = np.array(paths[index])
+
+
+            x = (path[:, 0] + 1) * 7.5
+            y = (path[:, 1] + 1) * 7.5
+            # print(min(x),max(x), min(y), max(y))
             axes[i].plot(x, y, style, linewidth=2, label=label)
 
-    def plot_points(paths, i, label):
+    def plot_points(paths, index, i, label):
         if paths is not None:
-            path = np.array(paths[i])
-            print(path)
-            x = (path[:][0] + 1) * 7.5
-            y = (path[:][1] + 1) * 7.5
+            path = np.array(paths[index])
+
+            x = (path[:, 0] + 1) * 7.5
+            y = (path[:, 1] + 1) * 7.5
+
             axes[i].scatter(x, y, color='r', marker='o', label=label)
 
     global visualized
-    drawn = 0
-    while visualized < args.n_viz and  drawn + args.num_plots <= len(maps):
-        for i in range(args.num_plots):
-            #TODO this will only loop through 4 and then repeast the same maps and not go forward 
-            axes[i].clear()
-            axes[i].imshow(maps[i, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
-            # axes[i].imshow(maps[i, 0], cmap='gray', extent=[-1, 1, -1, 1], origin='lower')
-            # # Set ticks/labels to show 0-15 scale, but data stays in [-1, 1]
-            # axes[i].set_xticks(np.linspace(-1, 1, 6))
-            # axes[i].set_xticklabels([f"{x:.1f}" for x in np.linspace(0, 15, 6)])
-            # axes[i].set_yticks(np.linspace(-1, 1, 6))
-            # axes[i].set_yticklabels([f"{y:.1f}" for y in np.linspace(0, 15, 6)])
-            # axes[i].set_xlabel("X [m]")
-            # axes[i].set_ylabel("Y [m]")
+    n = min(len(maps), args.n_viz - visualized)
+    for index in range(n):
+        #TODO this will only loop through 4 and then repeast the same maps and not go forward 
+        i = index % args.num_plots
+        axes[i].clear()
+        axes[i].imshow(maps[i, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
+        # axes[i].imshow(maps[i, 0], cmap='gray', extent=[-1, 1, -1, 1], origin='lower')
+        # # Set ticks/labels to show 0-15 scale, but data stays in [-1, 1]
+        # axes[i].set_xticks(np.linspace(-1, 1, 6))
+        # axes[i].set_xticklabels([f"{x:.1f}" for x in np.linspace(0, 15, 6)])
+        # axes[i].set_yticks(np.linspace(-1, 1, 6))
+        # axes[i].set_yticklabels([f"{y:.1f}" for y in np.linspace(0, 15, 6)])
+        # axes[i].set_xlabel("X [m]")
+        # axes[i].set_ylabel("Y [m]")
+    
+
+        #TODO switch from [i] to passing whole array 
+        
+        
+        plot_points(model_path_points,index ,i, 'Generated points')
+        plot_path(model_resampled_paths, index,i,'b-', 'Resampled')
+        plot_path(dynamic_paths, index,i,'m-', 'Dynamic Simulated')
+
+        plot_path(gt_paths,index ,i,'g--', 'GT')
+        draw_robot(gt_paths,index,i)
         
 
-            #TODO switch from [i] to passing whole array 
-            draw_robot(real_paths,i)
-            plot_path(real_paths,i ,'g--', 'GT')
-            plot_path(resampled_paths, i,'b-', 'Resampled')
-            plot_path(dynamic_paths, i,'m-', 'Dynamic Simulated')
-
-            plot_points(generated_paths,i , 'Generated points')
-            
-
-            
-            axes[i].legend()
-            axes[i].set_title('')
-            drawn += 1
-
-        if args.save:
-            plt.savefig(f"{save_dir}/visualization_{visualized}.pdf")
-        else:
-            plt.show(block=False)
-            plt.pause(0.1)
+        
+        axes[i].legend()
+        axes[i].set_title('')
         visualized += 1
+
+        if i == args.num_plots - 1 or visualized == args.n_viz:
+            if args.save:
+                plt.savefig(f"{save_dir}/visualization_{visualized}.pdf")
+            else:
+                plt.ion()
+                plt.show(block=False)
+                plt.pause(0.1)
 
 
 
@@ -284,13 +295,13 @@ def resample_paths(paths, path_type, original_paths):
 
     if path_type == 'cubic':
         for path, original_path in zip(paths, original_paths):
-            cs = CubicSpline(np.linspace(0, 1, path_len), path.T, axis=0)
-            new_points = cs(np.linspace(0, 1, original_path.shape[1]))
+            cs = CubicSpline(np.linspace(0, 1, path_len), path, axis=0)
+            new_points = cs(np.linspace(0, 1, len(original_path)))
             resampled.append(new_points)
     elif path_type == 'bspline':
         for path, original_path in zip(paths, original_paths):
-            bspline = BSpline(path_len,6, len(original_path[0]))
-            new_points = path @ bspline.N[0]
+            bspline = BSpline(path_len,6, len(original_path))
+            new_points =  bspline.N[0] @ path 
             resampled.append(new_points)
     elif path_type == 'extend':
         #cut to original length
@@ -314,7 +325,7 @@ from matplotlib.path import Path as MplPath
 BATCH_SIZE = 16
 
 
-def visualize_model(run):
+def visualize_model(run, sweep_name=None):
     if run.state == 'failed':
         print(f"Skipping failed run: {run.name}")
         return
@@ -362,7 +373,8 @@ def visualize_model(run):
     axes = axes.flatten() if n > 1 else [axes]
     plt.tight_layout()
 
-    save_dir = f"visualizations/{run.name}"
+
+    save_dir = '/'.join(["visualizations"] + ([sweep_name] if sweep_name else []) + [run.name])
     if args.save:
         os.makedirs(save_dir, exist_ok=True)
 
@@ -375,6 +387,8 @@ def visualize_model(run):
     path_lengths_original = []
     path_lengths_model = []
 
+    global visualized
+    visualized = 0
 
     #TODO parallize calculations 
     for b in range(0, len(dataset), BATCH_SIZE):
@@ -391,14 +405,13 @@ def visualize_model(run):
         generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1]).squeeze(0) 
         generated_path = generated_path if n > 1 else generated_path
 
-
-
+        #TODO do cpu paralelization 
         robot_params_renormalized = renormalize_robot(robots_params, dataset.robot_normalization, dataset.robot_variables)
-        print('genereted', generated_path.shape,'sampled', sampled_paths.shape,'map',    map_tensors.shape,'og', original_paths.shape)
         map_tensors = map_tensors.cpu().numpy()
         sampled_paths = np.transpose(sampled_paths.cpu().numpy(), (0, 2, 1))
         generated_path = np.transpose(generated_path.cpu().numpy(), (0, 2, 1))
         resampled_paths = resample_paths(generated_path, config.get('path_type', ''), original_paths)
+
         #TODO not sure if this doesnt need .T 
         dynamic_paths = simulate_path_cuda(generated_path,robots_params, dataset) if dynamic else None 
 
@@ -413,7 +426,12 @@ def visualize_model(run):
         path_lengths_original.extend(calculate_path_length(original_paths))
         path_lengths_model.extend(calculate_path_length(resampled_paths))
 
-        visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, generated_path, sampled_paths,axes=axes, save_dir=save_dir)
+
+        #TODO is the collison for model path's correct 
+        #TODO rework GT not drawing properly 
+
+
+        visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
 
 
 
@@ -430,6 +448,7 @@ def visualize_model(run):
             f.write(f"Collision Rate: {np.mean(collisons_original):.8f}\n")
             f.write(f"Average Curvature: {np.mean(curvatures_original):.8f}\n")
             f.write(f"Average Bending Energy: {np.mean(bending_energies_original):.8f}\n")
+
         np.savetxt(f"{save_dir}/metrics_model.csv", np.array([path_lengths_model, collisons_model, curvatures_model, bending_energies_model]).T, delimiter=",", header="path_length,collision,curvature,bending_energy", comments='')
         np.savetxt(f"{save_dir}/metrics_original.csv", np.array([path_lengths_original, collisons_original, curvatures_original, bending_energies_original]).T, delimiter=",", header="path_length,collision,curvature,bending_energy", comments='')
 
@@ -455,5 +474,7 @@ if __name__ == "__main__":
         visualize_model(api.run(parse_run_url(args.run_url)) )
     else:
         sweep = api.sweep(parse_run_url(args.run_url))
+        sweep_name = sweep.name  
+        print(f"Sweep name: {sweep_name}")
         for run in sweep.runs:
-            visualize_model(run)
+            visualize_model(run, sweep_name)
