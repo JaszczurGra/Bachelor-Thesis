@@ -369,7 +369,7 @@ def visualize_model(run, sweep_name=None):
 
 
     #TODO custom_dataset only works for sweeps 
-    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [f"{run.name}_ {config.get('path_type', '')}"])
+    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [f"{run.name}_{config.get('path_type', '')}_layers:{config['model']['num_internal_layers']}"])
     print('Save dir:', save_dir)
     print('Dynamic:',dynamic, end='\n\n')
     if args.save:
