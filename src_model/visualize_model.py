@@ -18,17 +18,15 @@ import cv2 #opencv-python
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_url', type=str, required=True, help='WandB run URL to load the model from')
 parser.add_argument('-m', '--max_dataset_length', type=int, default=None, help='Maximum number of samples to load from the dataset for debuging')
-parser.add_argument('--custom_dataset', type=str, default=None, help='Path to a custom dataset to visualize')
+parser.add_argument('--custom_dataset', type=str, default="", help='Path to a custom dataset to visualize')
 
 parser.add_argument('--n_viz', type=int, default=300, help='Number of visualizations imgs to generate ')
-
 parser.add_argument('-n', '--num_plots', type=int, default=1, help='Number of plots in the path')
 #TODO make this a number to save n number of singular plots 
 parser.add_argument('--save', action='store_true', help='Whether to save the plots as images instead of displaying them')
 
 parser.add_argument('--batch_size', type=int, default=512, help='Batch size for processing paths')
 args = parser.parse_args()
-
 matplotlib.use('Agg' if args.save else 'TkAgg') 
 
 import matplotlib.pyplot as plt
@@ -58,7 +56,7 @@ def renormalize_robot(robot_params, robot_normalization, robot_variables):
 
 def calculate_path_length(resampled_paths):
     # resampled_path: [T, path_dim]
-    #returns length in normalized cords to denormilize * 15 ^ 2
+    #returns length in normalized cords to denormilize * 15
     lengths = []
     for path in resampled_paths:
         path = np.array(path)  # shape [N, 2]
@@ -100,13 +98,11 @@ def calculate_validity_collisions(resampled_paths, map_tensors, robot_params_nor
     return collision_counts
 
 def calculate_turning_radius(resampled_paths):
-    #TODO not finished yet
 
     avg_bending_energies = [] 
     avg_curvatures = [] 
     for path in resampled_paths:
         path = np.array(path)  # shape [N, 2]
-        # Initialize arrays with 'inf' for radius and 0 for curvature
         bending_energy_sum = 0 
         curvature_sum = 0 
         for i in range(1, len(path) - 1):
@@ -114,13 +110,10 @@ def calculate_turning_radius(resampled_paths):
             p2 = path[i]
             p3 = path[i + 1]
 
-            # 1. Calculate the lengths of the sides of the triangle
             a = np.linalg.norm(p2 - p1)
             b = np.linalg.norm(p3 - p2)
             c = np.linalg.norm(p3 - p1)
 
-            # 2. Calculate the area of the triangle using the cross product
-            # Area = 0.5 * |x1(y2-y3) + x2(y3-y1) + x3(y1-y2)|
             area = 0.5 * abs(p1[0]*(p2[1] - p3[1]) + 
                             p2[0]*(p3[1] - p1[1]) + 
                             p3[0]*(p1[1] - p2[1]))
@@ -139,7 +132,7 @@ def calculate_turning_radius(resampled_paths):
 
     return avg_curvatures, avg_bending_energies
 visualized = 0
-def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths, model_path_points,axes,save_dir):
+def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths,axes, model_path_points,save_dir):
 
 
     
@@ -191,25 +184,14 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
     global visualized
     n = min(len(maps), args.n_viz - visualized)
     for index in range(n):
-        #TODO this will only loop through 4 and then repeast the same maps and not go forward 
         i = index % args.num_plots
         axes[i].clear()
         axes[i].imshow(maps[i, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
-        # axes[i].imshow(maps[i, 0], cmap='gray', extent=[-1, 1, -1, 1], origin='lower')
-        # # Set ticks/labels to show 0-15 scale, but data stays in [-1, 1]
-        # axes[i].set_xticks(np.linspace(-1, 1, 6))
-        # axes[i].set_xticklabels([f"{x:.1f}" for x in np.linspace(0, 15, 6)])
-        # axes[i].set_yticks(np.linspace(-1, 1, 6))
-        # axes[i].set_yticklabels([f"{y:.1f}" for y in np.linspace(0, 15, 6)])
-        # axes[i].set_xlabel("X [m]")
-        # axes[i].set_ylabel("Y [m]")
-    
 
-        #TODO switch from [i] to passing whole array 
-        
-        
-        plot_points(model_path_points,index ,i, 'Generated points')
+
         plot_path(model_resampled_paths, index,i,'b-', 'Resampled')
+        plot_points(model_path_points,index ,i, 'Generated points')
+
         plot_path(dynamic_paths, index,i,'m-', 'Dynamic Simulated')
 
         plot_path(gt_paths,index ,i,'g--', 'GT')
@@ -217,17 +199,23 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
         
 
         
-        axes[i].legend()
+        # axes[i].legend()
         axes[i].set_title('')
         visualized += 1
 
-        if i == args.num_plots - 1 or visualized == args.n_viz:
+
+
+        if visualized % args.num_plots == 0 or visualized == args.n_viz:
+            for ax in axes[i+1:]:
+                ax.clear()
+                 
             if args.save:
                 plt.savefig(f"{save_dir}/visualization_{visualized}.pdf")
             else:
                 plt.ion()
                 plt.show(block=False)
                 plt.pause(0.1)
+        
 
 
 
@@ -346,7 +334,7 @@ def visualize_model(run, sweep_name=None):
 
     n_maps = config["n_maps"] if args.max_dataset_length is None else min(config["n_maps"], args.max_dataset_length)
     
-    dataset = PathDataset(args.custom_dataset if args.custom_dataset is not None else config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', None),dynamic)
+    dataset = PathDataset(args.custom_dataset if args.custom_dataset != "" else config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', None),dynamic)
 
     start_time = datetime.datetime.now()
 
@@ -373,18 +361,12 @@ def visualize_model(run, sweep_name=None):
         print('DIDN"T LOAD MODEL IT"S NOT LOCALY SAVED')
         vis_model.load_state_dict(torch.load(best_model_path))
 
+
+
+    #TODO custom_dataset only works for sweeps 
+    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [run.name])
+    print('Save dir:', save_dir)
     print('Dynamic:',dynamic, end='\n\n')
-    n =  args.num_plots
-    cols = math.ceil(math.sqrt(n))
-    rows = math.ceil(n / cols)
-    # set n of subplots to n 
-    #TODO move this into the visualize to open new one 
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5))
-    axes = axes.flatten() if n > 1 else [axes]
-    plt.tight_layout()
-
-
-    save_dir = '/'.join(["visualizations"] + ([sweep_name] if sweep_name else []) + [run.name])
     if args.save:
         os.makedirs(save_dir, exist_ok=True)
 
@@ -397,6 +379,17 @@ def visualize_model(run, sweep_name=None):
     path_lengths_original = []
     path_lengths_model = []
 
+
+
+
+    n =  args.num_plots
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    # set n of subplots to n 
+    #TODO move this into the visualize to open new one 
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5))
+    axes = axes.flatten() if n > 1 else [axes]
+    plt.tight_layout()
     global visualized
     visualized = 0
 
@@ -423,33 +416,11 @@ def visualize_model(run, sweep_name=None):
         sampled_paths = np.transpose(sampled_paths.cpu().numpy(), (0, 2, 1))
         generated_path = np.transpose(generated_path.cpu().numpy(), (0, 2, 1))
         
-        #TODO paralize this 
-
 
         #TODO not sure if this doesnt need .T 
         dynamic_paths = simulate_path_cuda(generated_path,robots_params, dataset) if dynamic else None 
 
-
-
-
-
-        # if CPU_COUNT == 1:
-        #     resampled_paths = resample_paths(generated_path, config.get('path_type', ''), original_paths)
-        #     collisons_original.extend(calculate_validity_collisions(original_paths, map_tensors, robot_params_renormalized))
-        #     collisons_model.extend(calculate_validity_collisions(resampled_paths, map_tensors, robot_params_renormalized))
-        #     curvatures, bending_energies = calculate_turning_radius(original_paths)
-        #     curvatures_original.extend(curvatures)
-        #     bending_energies_original.extend(bending_energies)
-        #     curvatures, bending_energies = calculate_turning_radius(resampled_paths)
-        #     curvatures_model.extend(curvatures)
-        #     bending_energies_model.extend(bending_energies)
-        #     path_lengths_original.extend(calculate_path_length(original_paths))
-        #     path_lengths_model.extend(calculate_path_length(resampled_paths))
-        #     visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
-        # else:
-        #     #rebatching 
         with Pool(CPU_COUNT) as pool:
-            # Resample paths in parallel for each path if needed
             resampled_paths = pool.starmap(
                 resample_single_path,
                 [(generated_path[i], config.get('path_type', ''), original_paths[i]) for i in range(len(generated_path))]
@@ -470,21 +441,8 @@ def visualize_model(run, sweep_name=None):
             for curvatures, bending_energies in pool.starmap(calculate_turning_radius, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))]):
                 curvatures_model.extend(curvatures)
                 bending_energies_model.extend(bending_energies)
-
-            # collisons_original.extend(pool.starmap(calculate_validity_collisions, [( [original_paths[i]], map_tensors[i:i+1], {k: np.array([v[i]]) for k, v in robot_params_renormalized.items()} ) for i in range(len(original_paths))]))
-            # collisons_model.extend(pool.starmap(calculate_validity_collisions, [( [resampled_paths[i]], map_tensors[i:i+1], {k: np.array([v[i]]) for k, v in robot_params_renormalized.items()} ) for i in range(len(resampled_paths))]))
-            # curvatures_bending = pool.starmap(calculate_turning_radius, [( [original_paths[i]], ) for i in range(len(original_paths))])
-            # for curvatures, bending_energies in curvatures_bending:
-            #     curvatures_original.extend(curvatures)
-            #     bending_energies_original.extend(bending_energies)
-            # curvatures_bending = pool.starmap(calculate_turning_radius, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))])
-            # for curvatures, bending_energies in curvatures_bending:
-            #     curvatures_model.extend(curvatures)
-            #     bending_energies_model.extend(bending_energies)
-            # path_lengths_original.extend(pool.starmap(calculate_path_length, [( [original_paths[i]], ) for i in range(len(original_paths))]))
-            # path_lengths_model.extend(pool.starmap(calculate_path_length, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))]))
+           
             visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
-            # print(path_lengths_model,collisons_model, curvatures_model, bending_energies_model)
     dt = datetime.datetime.now() - start_time
     print(f"Visualization completed in {dt}")
 
@@ -496,16 +454,15 @@ def visualize_model(run, sweep_name=None):
 
     if args.save:
         with open(f"{save_dir}/metrics.txt", 'w') as f:
-            f.write('MODEL: \n')
-            f.write(f"Average Path Length: {np.mean(path_lengths_model):.8f}\n")
-            f.write(f"Collision Rate: {np.mean(collisons_model):.8f}\n")
-            f.write(f"Average Curvature: {np.mean(curvatures_model):.8f}\n")
-            f.write(f"Average Bending Energy: {np.mean(bending_energies_model):.8f}\n\n")
-            f.write('ORIGINAL: \n')
-            f.write(f"Average Path Length: {np.mean(path_lengths_original):.8f}\n")
-            f.write(f"Collision Rate: {np.mean(collisons_original):.8f}\n")
-            f.write(f"Average Curvature: {np.mean(curvatures_original):.8f}\n")
-            f.write(f"Average Bending Energy: {np.mean(bending_energies_original):.8f}\n")
+            f.write('METRIC,ORIGINAL, MODEL \n')
+            f.write(f"Average Path Length, {np.mean(path_lengths_original):.8f}, {np.mean(path_lengths_model):.8f}\n")
+            f.write(f"Collision Rate, {np.mean(collisons_original):.8f}, {np.mean(collisons_model):.8f}\n")
+            f.write(f"Average Curvature, {np.mean(curvatures_original):.8f}, {np.mean(curvatures_model):.8f}\n")
+            f.write(f"Median Curvature, {np.median(curvatures_original):.8f}, {np.median(curvatures_model):.8f}\n")  
+            f.write(f"Standard Deviation Curvature, {np.std(curvatures_original):.8f}, {np.std(curvatures_model):.8f}\n")
+            f.write(f"Average Bending Energy, {np.mean(bending_energies_original):.8f}, {np.mean(bending_energies_model):.8f}\n")
+            f.write(f"Median Bending Energy, {np.median(bending_energies_original):.8f}, {np.median(bending_energies_model):.8f}\n") 
+            f.write(f"Standard Deviation Bending Energy, {np.std(bending_energies_original):.8f}, {np.std(bending_energies_model):.8f}\n")
 
         np.savetxt(f"{save_dir}/metrics_model.csv", np.array([path_lengths_model, collisons_model, curvatures_model, bending_energies_model]).T, delimiter=",", header="path_length,collision,curvature,bending_energy", comments='')
         np.savetxt(f"{save_dir}/metrics_original.csv", np.array([path_lengths_original, collisons_original, curvatures_original, bending_energies_original]).T, delimiter=",", header="path_length,collision,curvature,bending_energy", comments='')
@@ -515,16 +472,10 @@ def visualize_model(run, sweep_name=None):
 
 
 
-    pass 
+    return 
 import datetime
 
 if __name__ == "__main__":
-
-
-
-
-
-
     pared_url = parse_run_url(args.run_url)
 
    
@@ -541,5 +492,8 @@ if __name__ == "__main__":
         for run in sweep.runs:
             visualize_model(run, sweep_name)
 
+        #TODO read all the meterixs and save avrage 
 
-    
+
+    # /mnt/storage_5/scratch/pl0467-01/jborowiecki/Bachelor-Thesis/src_model/visualize_model.py:217: tensor from np.ndaarray is super slow  
+    #increase time on extend 
