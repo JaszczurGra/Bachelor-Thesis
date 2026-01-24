@@ -105,6 +105,7 @@ def calculate_turning_radius(resampled_paths):
         path = np.array(path)  # shape [N, 2]
         bending_energy_sum = 0 
         curvature_sum = 0 
+        total_len = 0
         for i in range(1, len(path) - 1):
             p1 = path[i - 1]
             p2 = path[i]
@@ -121,14 +122,18 @@ def calculate_turning_radius(resampled_paths):
 
                 # r = 1 / k
 
- 
+
+            ds = (a + b) / 2
+            total_len += ds
+    
             if area > 1e-9:  
                 k = (4 * area) / (a * b * c)
-                bending_energy_sum += k  *  k
-                curvature_sum += k
+                bending_energy_sum += k  *  k * ds
+                curvature_sum += k * ds
 
-        avg_bending_energies.append(bending_energy_sum / (len(path) - 2))
-        avg_curvatures.append(curvature_sum / (len(path) - 2))
+        #TODO if path didn't have enough points 
+        avg_bending_energies.append(bending_energy_sum / total_len if total_len > 0 else 0)
+        avg_curvatures.append(curvature_sum / total_len if total_len > 0 else 0)
 
     return avg_curvatures, avg_bending_energies
 visualized = 0
@@ -364,7 +369,7 @@ def visualize_model(run, sweep_name=None):
 
 
     #TODO custom_dataset only works for sweeps 
-    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [run.name])
+    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [f"{run.name}_ {config.get('path_type', '')}"])
     print('Save dir:', save_dir)
     print('Dynamic:',dynamic, end='\n\n')
     if args.save:
@@ -475,6 +480,46 @@ def visualize_model(run, sweep_name=None):
     return 
 import datetime
 
+def merge_metrics(sweep_name):
+    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []))
+    merged_path = os.path.join(save_dir, "merged_metrics.csv")
+
+    metrics_model = {}
+    metrics_original = {}
+    models = []
+
+    for d in os.listdir(save_dir):
+        run_dir = os.path.join(save_dir, d)
+        metrics_path = os.path.join(run_dir, 'metrics.txt')
+        if os.path.isdir(run_dir) and os.path.exists(metrics_path):
+            with open(metrics_path) as f:
+                lines = f.readlines()
+                for l in lines[1:]:
+                    metric, original, model = l.strip().split(',')
+                    metrics_model[metric] = metrics_model.get(metric, []) + [model]
+                    metrics_original[metric] = original
+                models.append(d)
+
+
+    
+
+    # Write merged CSV
+    with open(merged_path, "w") as out:
+        out.write(','.join( ['Model'] + [str(k) for k in metrics_model.keys()]) + '\n') 
+        
+        out.write('Original')
+        for value in metrics_original.values():
+            out.write(',')
+            out.write(value)
+
+        for i, d in enumerate(models):
+            out.write('\n' + d)
+            for value in metrics_model.values():
+                out.write(',')
+                out.write(value[i])
+
+    print(f"Merged metrics saved to {merged_path}")
+
 if __name__ == "__main__":
     pared_url = parse_run_url(args.run_url)
 
@@ -491,7 +536,7 @@ if __name__ == "__main__":
         print(f"Sweep name: {sweep_name}")
         for run in sweep.runs:
             visualize_model(run, sweep_name)
-
+        merge_metrics(sweep_name)
         #TODO read all the meterixs and save avrage 
 
 
