@@ -138,9 +138,6 @@ def calculate_turning_radius(resampled_paths):
     return avg_curvatures, avg_bending_energies
 visualized = 0
 def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths,axes, model_path_points,save_dir):
-
-
-    print(maps.shape)
     # N, 2 
     def draw_robot(paths,index, i):
         path = np.array(paths[index])
