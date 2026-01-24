@@ -140,7 +140,7 @@ visualized = 0
 def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths,axes, model_path_points,save_dir):
 
 
-    
+    print(maps.shape)
     # N, 2 
     def draw_robot(paths,index, i):
         path = np.array(paths[index])
@@ -191,7 +191,7 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
     for index in range(n):
         i = index % args.num_plots
         axes[i].clear()
-        axes[i].imshow(maps[i, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
+        axes[i].imshow(maps[index, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
 
 
         plot_path(model_resampled_paths, index,i,'b-', 'Resampled')
@@ -211,8 +211,9 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
 
 
         if visualized % args.num_plots == 0 or visualized == args.n_viz:
-            for ax in axes[i+1:]:
-                ax.clear()
+            if visualized == args.n_viz:
+                for ax in axes[i+1:]:
+                    ax.clear()
                  
             if args.save:
                 plt.savefig(f"{save_dir}/visualization_{visualized}.pdf")
