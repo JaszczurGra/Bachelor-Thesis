@@ -20,11 +20,11 @@ parser.add_argument('--run_url', type=str, required=True, help='WandB run URL to
 parser.add_argument('-m', '--max_dataset_length', type=int, default=None, help='Maximum number of samples to load from the dataset for debuging')
 parser.add_argument('--custom_dataset', type=str, default="", help='Path to a custom dataset to visualize')
 
-parser.add_argument('--n_viz', type=int, default=300, help='Number of visualizations imgs to generate ')
+parser.add_argument('--n_viz', type=int, default=100, help='Number of visualizations imgs to generate ')
 parser.add_argument('-n', '--num_plots', type=int, default=1, help='Number of plots in the path')
 #TODO make this a number to save n number of singular plots 
 parser.add_argument('--save', action='store_true', help='Whether to save the plots as images instead of displaying them')
-
+parser.add_argument('--viz_interval',type=int,default=10, help='Interval between visualizations')
 parser.add_argument('--batch_size', type=int, default=512, help='Batch size for processing paths')
 args = parser.parse_args()
 matplotlib.use('Agg' if args.save else 'TkAgg') 
@@ -139,10 +139,11 @@ def calculate_turning_radius(resampled_paths):
 visualized = 0
 def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, model_resampled_paths,axes, model_path_points,save_dir):
     # N, 2 
+    print(robot_params_renormalized['width'], robot_params_renormalized['length'])
     def draw_robot(paths,index, i):
         path = np.array(paths[index])
-        robot_width = robot_params_renormalized['width'][i]
-        robot_length = robot_params_renormalized['length'][i]
+        robot_width = robot_params_renormalized['width'][index]
+        robot_length = robot_params_renormalized['length'][index]
         corners = np.array([
             [-robot_length/2, -robot_width/2],
             [robot_length/2, -robot_width/2],
@@ -161,7 +162,7 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
         rotated_corners[:, 0] += (path[0][0] + 1) * 7.5
         rotated_corners[:, 1] += (path[0][1] + 1) * 7.5
 
-        rect = Polygon(rotated_corners, closed=True, facecolor='green', edgecolor='b', alpha=0.5, label='Robot')
+        rect = Polygon(rotated_corners, closed=True, facecolor='green', edgecolor='black', alpha=1, label='Robot')
         axes[i].add_patch(rect)
 
     def plot_path(paths, index, i, style, label):
@@ -185,7 +186,7 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
 
     global visualized
     n = min(len(maps), args.n_viz - visualized)
-    for index in range(n):
+    for index in range(0,n, args.viz_interval):
         i = index % args.num_plots
         axes[i].clear()
         axes[i].imshow(maps[index, 0], cmap='gray', extent=[0,15,0,15], origin='lower')
@@ -398,8 +399,8 @@ def visualize_model(run, sweep_name=None):
 
     print('Loaded dataset')
 
-    #TODO parallize calculations 
-    for b in range(0, len(dataset), args.batch_size):
+    #TODO changed to n_viz to only do viz  from len(dataset)
+    for b in range(0,len(dataset), args.batch_size):
         batch_idxs = list(range(b, min(b + args.batch_size, len(dataset))))
         map_tensors, robots_params, sampled_paths  = [torch.stack(tensors) for tensors in zip(*[dataset[i] for i in batch_idxs])]
         original_paths = dataset.original_paths[batch_idxs]  # [B, path_len, path_dim]
@@ -413,7 +414,6 @@ def visualize_model(run, sweep_name=None):
         generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1]).squeeze(0) 
         generated_path = generated_path if n > 1 else generated_path
 
-        #TODO do cpu paralelization 
         robot_params_renormalized = renormalize_robot(robots_params, dataset.robot_normalization, dataset.robot_variables)
         map_tensors = map_tensors.cpu().numpy()
         sampled_paths = np.transpose(sampled_paths.cpu().numpy(), (0, 2, 1))
