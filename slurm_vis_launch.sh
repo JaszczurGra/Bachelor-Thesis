@@ -21,7 +21,8 @@ python src_model/visualize_model.py \
     --run_url "$1" \
     --save \
     --batch_size "$2"\
-    --custom_dataset "$3"
+    --custom_dataset "$3"\
+    -m 12
   
 #grouchy_penguin_23-01-2026_00:43:35
 echo "Visualization finished."

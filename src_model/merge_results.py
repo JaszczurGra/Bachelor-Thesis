@@ -14,14 +14,14 @@ models = [
     "valiant-sweep-23_cubic:128_layers:3",
     "ruby-sweep-8_bspline:10_layers:3",
     "apricot-sweep-9_bspline:15_layers:3",
-    "sparkling-sweep-2_linear:128_layers:4",
-    "upbeat-sweep-21_linear:64_layers:4",
-    "ancient-sweep-22_linear:15_layers:4",
-    "earthy-sweep-7_cubic:15_layers:4",
-    "radiant-sweep-6_cubic:64_layers:4",
-    "valiant-sweep-23_cubic:128_layers:4",
-    "ruby-sweep-8_bspline:10_layers:4",
-    "apricot-sweep-9_bspline:15_layers:4"
+    "super-sweep-11_linear:128_layers:4",
+    "cosmic-sweep-12_linear:64_layers:4",
+    "true-sweep-13_linear:15_layers:4",
+    "smooth-sweep-16_cubic:15_layers:4",
+    "fine-sweep-15_cubic:64_layers:4",
+    "copper-sweep-14_cubic:128_layers:4",
+    "lyric-sweep-17_bspline:10_layers:4",
+    "still-sweep-18_bspline:15_layers:4"
 ]
 
 output_file = 'visualizations/merged_results'
