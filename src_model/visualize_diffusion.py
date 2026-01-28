@@ -30,21 +30,24 @@ parser.add_argument('--save', action='store_true', help='Whether to save the plo
 
 parser.add_argument('--batch_size', type=int, default=8, help='Batch size for processing paths')
 parser.add_argument('--viz_interval', type=int, default=250, help='Interval of diffusion steps to visualize')
-parser.add_argument('--skip', type=int, default=100, help='Skip every n paths when visualizing diffusion process')
+parser.add_argument('--skip', type=int, default=25, help='Skip every n paths when visualizing diffusion process')
 
 args = parser.parse_args()
 matplotlib.use('Agg' if args.save else 'TkAgg') 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+#cubic:64
 #python src_model/visualize_diffusion.py --run_url "https://wandb.ai/j-boro-poznan-university-of-technology/Bachelor-Thesis-src_model/sweeps/xrqywefs/runs/jpc89t7y?nw=nwuserjaszczurgra" -m 5 --save
+#beysian:15
+#python src_model/visualize_diffusion.py --run_url "https://wandb.ai/j-boro-poznan-university-of-technology/Bachelor-Thesis-src_model/sweeps/xrqywefs/runs/szwf88tt?nw=nwuserjaszczurgra" -m 5 --save
 
 #950
 INTERVALS = [1,900, 975, 1000]
+
+INTERVALS_A = [1000 - i for i in INTERVALS]
 INTERVALS = [1,800, 900,950, 980, 1000]
-
-INTERVALS = [1000 - i for i in INTERVALS]
-
+INTERVALS_B = [1000 - i for i in INTERVALS]
 current_drawing  = 0 
 
 def draw(x_batched,  map_tensors,save_dir):
@@ -66,7 +69,6 @@ def draw(x_batched,  map_tensors,save_dir):
 
         axes = axes.flatten() if steps > 1 else [axes]
 
-        h, w = axes[0].get_subplotspec().get_gridspec().get_geometry()
 
 
 
@@ -119,7 +121,7 @@ def draw(x_batched,  map_tensors,save_dir):
         # plt.show()
         current_drawing += 1
         if args.save:
-            plt.savefig(f"{save_dir}/diffusion_{current_drawing}.pdf")  
+            plt.savefig(f"{save_dir}/diffusion_{steps}_{current_drawing}.pdf")  
             plt.close()
         else:
             plt.ion()
@@ -133,6 +135,35 @@ def draw(x_batched,  map_tensors,save_dir):
     #     for x, i in zip(x_steps, steps):    
     #     # 2, N 
 
+def resample_paths(paths, path_type, original_paths):
+    #only resample cubic and bspline 
+
+    path_type, path_len = path_type.split(':')[0]  , int(path_type.split(':')[1] if len(path_type.split(':')) >1 else  0)
+
+
+    resampled = []
+
+    if path_type == 'cubic':
+        for path, original_path in zip(paths, original_paths):
+            cs = CubicSpline(np.linspace(0, 1, path_len), path, axis=0)
+            new_points = cs(np.linspace(0, 1, len(original_path)))
+            resampled.append(new_points)
+    elif path_type == 'bspline':
+        for path, original_path in zip(paths, original_paths):
+            bspline = BSpline(path_len,6, len(original_path))
+            new_points =  bspline.N[0] @ path 
+            resampled.append(new_points)
+    elif path_type == 'extend':
+        #cut to original length
+        for path, original_path in zip(paths, original_paths):
+            resampled.append(path[:original_path.shape[0], :])
+    else :
+        #don't do anything can't reverse downsampling for linear 
+        return paths 
+
+    #all have diffrent lenghts excpet the linear as it's not reversible 
+
+    return resampled
 
 
 
@@ -152,7 +183,7 @@ class DiffusionManager:
         sqrt_one_minus_alpha = self.sqrt_one_minus_alphas_cumprod[t][:, None, None]
         return sqrt_alpha * x_start + sqrt_one_minus_alpha * noise, noise
 
-    def sample(self, model, map_cond,robot_params, path_len, path_params_len, save_dir):
+    def sample(self, model, map_cond,robot_params, path_len, path_params_len, save_dir, intervals):
         to_draw = defaultdict(list)
         model.eval()
         with torch.no_grad():
@@ -177,7 +208,7 @@ class DiffusionManager:
                 # CRITICAL: Clamp to prevent explosion
                 x = torch.clamp(x, -3, 3)  # Allow some wiggle room
 
-                if i in INTERVALS:
+                if i in intervals:
                     to_draw[self.timesteps - i] = torch.clamp(x,-1,1).detach().cpu().numpy()
             
             draw(to_draw, map_cond.detach().cpu().numpy(), save_dir)
@@ -248,6 +279,7 @@ def visualize_model(run, sweep_name=None):
 
     idxs = list(range(0, len(dataset), args.skip))
 
+
     #TODO parallize calculations 
     for b in range(0, len(idxs), args.batch_size):
         batch_idxs = idxs[b : b + args.batch_size]
@@ -260,7 +292,9 @@ def visualize_model(run, sweep_name=None):
         #     normalized_original_paths.append(norm_path)
         # original_paths = normalized_original_paths
 
-        generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1], save_dir).squeeze(0) 
+        generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1], save_dir, INTERVALS_A).squeeze(0) 
+        generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1], save_dir , INTERVALS_B).squeeze(0) 
+
         # generated_path = generated_path if n > 1 else generated_path
 
         #TODO do cpu paralelization 
