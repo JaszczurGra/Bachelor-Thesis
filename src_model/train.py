@@ -392,7 +392,7 @@ class DiffusionManager:
 local_config = {
     # batch size = 64 - approximately 5GB vram
     "epochs": 1000,
-    "batch_size": 16 ,
+    "batch_size": 1024 ,   
     "lr": 1e-3,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -402,7 +402,7 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 2,
+    'n_maps': 100,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {

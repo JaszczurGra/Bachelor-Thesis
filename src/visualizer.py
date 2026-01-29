@@ -72,24 +72,6 @@ class Visualizer:
                     ax.set_visible(True)
                     self.draw_one(result, ax, show_params, show_labels, custom_tile=custom_title[i] if custom_title is not None else None)
 
-<<<<<<< HEAD
-        self.fig.canvas.draw_idle()
-        self.fig.canvas.flush_events()
-
-    def draw_one(self, result, ax, show_params=True, show_labels=False, custom_tile=None):
-            ax.cla()
-            ax.grid(True, alpha=0.3)
-            
-            max_vel = result['planner'].visualize(ax,point_iteration = 50)
-            ax.set_title((f'V:{max_vel:.2f}/{result["planner"].robot.max_velocity:.2f} ' + (f'T:{result["planner"].solved_time:.2f}s' if result['planner'].solved_time is not None else '')) if custom_tile is None else custom_tile)
-            
-            #Show legend only once
-            if not self.set_labels and show_labels:
-                handles, labels = ax.get_legend_handles_labels()
-                unique_labels = dict(zip(labels, handles))
-                self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
-                self.set_labels = True
-=======
                     ax.cla()
                     ax.set_xlim(0, 10)
                     ax.set_ylim(0, 10)
@@ -104,7 +86,6 @@ class Visualizer:
                         unique_labels = dict(zip(labels, handles))
                         # self.fig.legend(unique_labels.values(), unique_labels.keys(), loc='upper left')
                         # self.set_labels = True
->>>>>>> b625831 (Small visualizer change)
 
 
             if show_params:

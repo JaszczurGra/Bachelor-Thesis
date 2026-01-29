@@ -33,8 +33,7 @@ import matplotlib.pyplot as plt
 import re
 from matplotlib.patches import Polygon
 
-#TODO vis goes over efvery map and path in order so to have diffrent ones it doesnt work 
-
+#python src_model/visualize_model.py --run_url "" --save -m 10
 
 def parse_run_url(url):
     m = re.search(r"wandb\.ai/([^/]+)/([^/]+)/(?:sweeps/[^/]+/)?runs/([^/?]+)", url)    if 'runs' in url else re.search(r"wandb\.ai/([^/]+)/([^/]+)/sweeps/([^/?#]+)", url)
@@ -45,9 +44,10 @@ def parse_run_url(url):
 
 
 
-
 #TODO do this as tensor 
 def renormalize_robot(robot_params, robot_normalization, robot_variables):
+    #TODO remove this line
+    print(robot_params)
     norm_ranges = np.array([robot_normalization[var][1] - robot_normalization[var][0] for var in robot_variables])
     norm_mins = np.array([robot_normalization[var][0] for var in robot_variables])
     renormalized = 0.5 * (robot_params + 1) * norm_ranges + norm_mins
@@ -169,11 +169,12 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
         if paths is not None:
             path = np.array(paths[index])
 
-
             x = (path[:, 0] + 1) * 7.5
             y = (path[:, 1] + 1) * 7.5
             # print(min(x),max(x), min(y), max(y))
             axes[i].plot(x, y, style, linewidth=2, label=label)
+
+
 
     def plot_points(paths, index, i, label):
         if paths is not None:
@@ -226,33 +227,39 @@ def visualize_results(maps, robot_params_renormalized, dynamic_paths, gt_paths, 
 def simulate_path_cuda(path,robot_params, dataset):
     # states = torch.zeros((N, T, 4), device=device)      # [x, y, theta, v]
     # controls = torch.zeros((N, T, 2), device=device)    # [acceleration, steering_angle]
-    device = path.device  # Ensure all tensors are on the same device
     # Make sure these tensors are on the same device as path
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    path = torch.tensor(path, device=device,dtype=torch.float32)  # [N, path_dim, T]
     norm_ranges = torch.tensor(
         [[dataset.path_normalization[var][1] - dataset.path_normalization[var][0] for var in dataset.path_variables]],
         device=device
-    ).unsqueeze(-1)
+    ).unsqueeze(-1).to(device)
     norm_mins = torch.tensor(
         [[dataset.path_normalization[var][0] for var in dataset.path_variables]],
         device=device
-    ).unsqueeze(-1)
+    ).unsqueeze(-1).to(device)
 
-    path = path.clone()
+    # path = path.to(device)
+
     path = 0.5 * (path + 1) * norm_ranges + norm_mins
 # Your robot_params should be tensors or broadcastable arrays on the same device
     states = path[:, :4, :]      # [N, T, 4]  [x, y, theta, v]
     controls = path[:, 4:6, :]    # [N, T, 2]  [acceleration, steering_angle]
     robot_param_dict = {}
-    for i, key in enumerate(dataset.robot_variables + ['dt']):
+    for i, key in enumerate(dataset.robot_variables + ['dt']): 
         robot_param_dict[key] = robot_params[:, i]
     robot_params = robot_param_dict
-    
+    robot_params = {k: torch.tensor(v, device=device,dtype=torch.float32) for k, v in robot_params.items()}
     robot_params = { k: (v + 1) *  (dataset.robot_normalization[k][1] - dataset.robot_normalization[k][0]) / 2 + dataset.robot_normalization[k][0] for k, v in robot_params.items()}
 
-    _lateral_force_min_v = torch.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / torch.tan(robot_params["max_steering_at_zero_v"]) ) 
+    _lateral_force_min_v = torch.sqrt(robot_params["wheelbase"] * robot_params["mu_static"] * 9.81 / torch.tan(robot_params["max_steering_at_zero_v"]) ).to(device)
    
-    dt = robot_params["dt"]  # (N, 1)
 
+    dt = robot_params["dt"]  # (N, 1)
+    dt = (0.5 * (dt + 1) * (5.12 - 0.01) + 0.01) 
+
+    print(dt) 
     for t in range(1, dataset.path_length):
         prev_state = states[:, :, t-1]  # (N, 4)
         control = controls[:, :, t]     # (N, 2)
@@ -338,7 +345,7 @@ def visualize_model(run, sweep_name=None):
 
     n_maps = config["n_maps"] if args.max_dataset_length is None else min(config["n_maps"], args.max_dataset_length)
     
-    dataset = PathDataset(args.custom_dataset if args.custom_dataset != "" else config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', None),dynamic)
+    dataset = PathDataset(args.custom_dataset if args.custom_dataset != "" else config["dataset_path"], n_maps, config["map_resolution"], config.get('path_type', 'linear:64'),dynamic)
 
     start_time = datetime.datetime.now()
 
@@ -362,13 +369,15 @@ def visualize_model(run, sweep_name=None):
         verbose=False
     ).to(device)
     if os.path.exists(best_model_path):
-        print('DIDN"T LOAD MODEL IT"S NOT LOCALY SAVED')
         vis_model.load_state_dict(torch.load(best_model_path))
+    else:
+        print('DIDN"T LOAD MODEL IT"S NOT LOCALY SAVED')
+
 
 
 
     #TODO custom_dataset only works for sweeps 
-    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [f"{run.name}_{config.get('path_type', '')}_layers:{config['model']['num_internal_layers']}"])
+    save_dir = '/'.join(["visualizations"] + ([f"sweep_{sweep_name}_{args.custom_dataset.split('/')[-1]}"] if sweep_name else []) + [f"{run.name}_{config.get('path_type', '')}_layers:{config['model']['num_internal_layers']}"] + [f"_{args.custom_dataset.split('/')[-1]}" ] )
     print('Save dir:', save_dir)
     print('Dynamic:',dynamic, end='\n\n')
     if args.save:
@@ -414,14 +423,19 @@ def visualize_model(run, sweep_name=None):
         generated_path = diff.sample(vis_model, map_tensors.to(device),robots_params.to(device), sampled_paths.shape[2], sampled_paths.shape[1]).squeeze(0) 
         generated_path = generated_path if n > 1 else generated_path
 
-        robot_params_renormalized = renormalize_robot(robots_params, dataset.robot_normalization, dataset.robot_variables)
+
+        robot_params_renormalized = renormalize_robot(robots_params, dataset.robot_normalization, dataset.robot_variables + ['dt'])
         map_tensors = map_tensors.cpu().numpy()
         sampled_paths = np.transpose(sampled_paths.cpu().numpy(), (0, 2, 1))
+        dynamic_paths = simulate_path_cuda(generated_path,robots_params, dataset) if dynamic else None 
+
         generated_path = np.transpose(generated_path.cpu().numpy(), (0, 2, 1))
-        
+
+        if dynamic:
+            dynamic_paths = np.transpose(dynamic_paths, (0, 2, 1))
+            dynamic_paths = resample_paths(dynamic_paths, config.get('path_type', ''), original_paths)
 
         #TODO not sure if this doesnt need .T 
-        dynamic_paths = simulate_path_cuda(generated_path,robots_params, dataset) if dynamic else None 
 
         with Pool(CPU_COUNT) as pool:
             resampled_paths = pool.starmap(
@@ -444,7 +458,8 @@ def visualize_model(run, sweep_name=None):
             for curvatures, bending_energies in pool.starmap(calculate_turning_radius, [( [resampled_paths[i]], ) for i in range(len(resampled_paths))]):
                 curvatures_model.extend(curvatures)
                 bending_energies_model.extend(bending_energies)
-           
+
+            
             visualize_results(map_tensors, robot_params_renormalized, dynamic_paths, original_paths, model_resampled_paths=resampled_paths, model_path_points=generated_path,axes=axes, save_dir=save_dir)
     dt = datetime.datetime.now() - start_time
     print(f"Visualization completed in {dt}")
