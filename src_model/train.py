@@ -194,7 +194,7 @@ class PathDataset(Dataset):
         self.bspline = None 
 
         self.original_paths = np.array(self.paths,dtype=object) #keep original for visualization
-
+        
         path_type, path_len = path_type.split(':')[0]  , int(path_type.split(':')[1] if len(path_type.split(':')) >1 else  max(len(p) for p in self.paths))
         self.path_length = path_len
         if path_type == 'extend':
@@ -257,6 +257,7 @@ class PathDataset(Dataset):
         return resampled_paths, dts
 
     def resample_path_extend_last_point(self, paths, target_len, path_variables, dt=0.01):
+        print('Maximal path for the path length:', target_len)
         resampled_paths = []
         for path in paths:
             resampled_paths.append(path + [path[-1]] * (target_len - len(path)))
@@ -391,7 +392,7 @@ class DiffusionManager:
 local_config = {
     # batch size = 64 - approximately 5GB vram
     "epochs": 1000,
-    "batch_size": 64 ,
+    "batch_size": 16 ,
     "lr": 1e-3,
     "timesteps": 1000,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -401,7 +402,7 @@ local_config = {
     "checkpoint_freq": 250,
     'visualization_freq': 50,
     "resume_path": None,
-    'n_maps': 400,
+    'n_maps': 2,
     'beta_start': 1e-4,
     'beta_end': 0.02,
     'model': {
@@ -412,10 +413,10 @@ local_config = {
         'base_layer_dim': 128
     },
     'map_resolution': 496, #must be multiple of 8 TODO interpolate down to multiples of 8
-    'dynamic': False,
+    'dynamic': True,
     'weight_decay': 1e-4,
     'dropout': 0.25,
-    'path_type':  'extend' # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
+    'path_type':  'bspline:10' # 'linear', 'BSpline', 'cubic' or specify like 'extend:128' to extend to length 128
 }
 
 def train():
