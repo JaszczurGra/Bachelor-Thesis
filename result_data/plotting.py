@@ -7,6 +7,8 @@ category_y = ['Collision %','Path Length (m)','Curvature (1/m)']
 category_scaling = [100,7.5,1]
 datasets= ['validation', 'whole']  
 
+logaritmic_scale = False    
+
 for dataset in datasets:
     for category in categories:
 
@@ -49,10 +51,12 @@ for dataset in datasets:
             f"{m.split('_')[0].split(':')[0]}, {m.split('_')[0].split(':')[1]} units, {m.split('_')[1].split(':')[1]} layers"
             for m in models[1:]
         ]
+        if logaritmic_scale:
+            ax.set_yscale('log')
         ax.set_xticks(range(len(models)))
         ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=10)
         # plt.title('Comparison of Model Performance', fontsize=15)
         plt.xlabel('', fontsize=12)
         plt.ylabel(category_y[categories.index(category)], fontsize=12)
         plt.tight_layout()
-        plt.savefig(f'model_comparison_{dataset}_{category}.pdf', dpi=300)
+        plt.savefig(f'model_comparison_{dataset}_{category}{ "_log" if logaritmic_scale else ""}.pdf', dpi=300)
